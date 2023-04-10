@@ -1,0 +1,2933 @@
+---
+title: "Final Paper Code"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+date: "2023-04-06"
+---
+
+#Load Packages
+```{r}
+library(haven)
+options("install.lock"=FALSE)
+install.packages("tidyverse")
+library(tidyverse)
+library(memisc)
+```
+#Data Cleaning
+
+## 2021 Provincial Elections
+
+```{r 2021 Provincial Elections}
+
+#Load the data:
+NS2021 <- read_dta("521 Data/2021 NS Election.dta")
+NL2021 <- read_dta("521 Data/2021 NL Election.dta")
+
+#Function to tidy the data:
+func2021<-function(prov, survey){prov %>% 
+    mutate(intent = NA,
+                                       finance = NA,
+                                       satisfaction = NA,
+         language = ifelse(pes_langhome_68 + pes_langhome_69 == 0, "Other", NA),
+         language = ifelse(pes_langhome_68 == 1, "English", language),
+         language = ifelse(pes_langhome_69 == 1, "French", language),
+         language = ifelse((pes_langhome_69 +  pes_langhome_68) == 2, "English & French", language))  %>% mutate(surv = survey)%>%  
+    dplyr::select(
+      pes_StartDate,
+      cps_edu,
+      pes_confidence_1,                                  pes_confidence_2, 
+                  cps_yob, 
+                  cps_genderid, 
+      cps_province, 
+      cps_fedpid, 
+      cps_pastpartyvote, 
+                                              intent,
+                                              cps_interest_1,
+                                              finance,
+                                              satisfaction,
+      language,
+      surv,
+      pes_fedpower,
+      cps_provpid) }
+
+
+#Run the function
+
+NL2021<-func2021(NL2021, "NL2021") 
+
+
+#Function for NS is slightly different because a couple of variables are differently named
+func2021<-function(prov, survey){prov %>% mutate(intent = NA,
+                                       finance = NA,
+                                       satisfaction = NA,
+                          
+         language = ifelse(cps_langhome_1 + cps_langhome_2 == 0, "Other", NA),
+         language = ifelse(cps_langhome_1 == 1, "English", language),
+         language = ifelse(cps_langhome_2 == 1, "French", language),
+         language = ifelse((cps_langhome_1 +  cps_langhome_2) == 2, "English & French", language)) %>%  mutate(surv = survey) %>% 
+    dplyr::select(
+      pes_StartDate,
+      cps_edu,
+      pes_confidence_1,                                  pes_confidence_2, 
+                  cps_yob, 
+                  cps_genderid, 
+      cps_province, 
+      cps_fedpid, 
+      cps_pastpartyvote, 
+                                              intent,
+                                              cps_interest_1,
+                                              finance,
+                                              satisfaction,
+      language,
+      surv,
+      pes_fedpower,
+      cps_provpid)  }
+
+#Run the function - converting to character to make combining easier
+NS2021<-func2021(NS2021, "NS2021") %>%   
+  mutate(across(everything(), as.character))
+
+#Rename columns
+colnames(NS2021) <-c("Date",
+  "Education",
+  "Conf_Fed",
+  "Conf_Prov",
+  "YOB",
+  "Gender",
+  "Province",
+  "Party_ID",
+  "Prev_Vote",
+  "Vote_Intent",
+  "Interest",
+  "Finance",
+  "Fed_Sat",
+  "Language",
+  "Survey",
+  "Fed_Prov_Power",
+  "Provincial_PID")
+
+
+colnames(NL2021)<- colnames(NS2021)
+
+
+#Combine data
+Prov2021<-rbind(NS2021,
+      NL2021) %>%   mutate(across(2:13, as.numeric)
+)
+
+#Recode Year of Birth
+Prov2021
+Prov2021 <- Prov2021 %>% 
+  mutate(YOB=as.numeric(YOB)+1919) 
+
+
+##Recode power preference (fed vs province)
+Prov2021$Fed_Prov_Power[Prov2021$Fed_Prov_Power == -99] <- NA
+Prov2021$Fed_Prov_Power[Prov2021$Fed_Prov_Power == 1] <- "Federal"
+Prov2021$Fed_Prov_Power[Prov2021$Fed_Prov_Power == 2] <- "Provincial"
+
+#Recoding education
+
+Prov2021$Educ2[Prov2021$Education < 6] <- "Highschool or Less"
+
+
+Prov2021$Educ2[Prov2021$Education > 5 & Prov2021$Education < 9] <- "Some Post-Secondary"
+
+Prov2021$Educ2[Prov2021$Education == 9] <- "Bachelor"
+
+Prov2021$Educ2[Prov2021$Education == 10 | Prov2021$Education == 11] <- "Post-Graduate Degree"
+
+Prov2021$Education <- Prov2021$Educ2
+
+Prov2021 <- Prov2021 %>% dplyr::select(-Educ2)
+
+
+
+Prov2021 <- Prov2021 %>%
+  mutate(Party_ID_r = dplyr::recode(Party_ID,
+                                           `1` = "Liberal",
+                                              `2` ="Conservative",
+                                                `3` = "NDP",
+                                              `4`= "Green",
+                                              `5` = "Other",
+                                              `6` = "None"))
+```
+
+
+## 2020 Provincial Elections
+
+```{r}
+
+
+#Load data
+BC2020 <- read_dta("521 Data/2020 BC Election.dta")
+SK2020 <- read_dta("521 Data/2020 Sask Election.dta")
+NB2020 <- read_dta("521 Data/2020 NB Election.dta")
+
+
+#Create Function
+func2020 <-  function(data,
+    pr,
+                      survey){
+  
+  data %>%mutate(province = pr,
+                 vote_intent = NA,
+                 finance = NA,
+                  satisfaction = NA,
+         language = ifelse(pes_langhome_68 + pes_langhome_69 == 0, "Other", NA),
+         language = ifelse(pes_langhome_68 == 1, "English", language),
+         language = ifelse(pes_langhome_69 == 1, "French", language),
+         language = ifelse((pes_langhome_69 +  pes_langhome_68) == 2, "English & French", language)) %>% 
+  mutate(surv = survey)%>%  
+    dplyr::select(cps_StartDate,
+                                                        cps_edu,
+                         pes_confidence_1,
+                         pes_confidence_2,
+                         cps_yob,
+                         cps_gender,
+                         province,
+                         cps_fedpid,
+                         cps_pastvote,
+                         vote_intent,
+                         cps_interest_1,
+                         finance,
+                          satisfaction,
+                         language,
+                  surv, 
+                  pes_fedpower,
+                  cps_provpid) 
+}
+
+
+#Run the function on each provincial election dataset
+SK2020<-func2020(SK2020,
+         "SK",
+         "SK2020")
+
+BC2020<-func2020(BC2020,
+         "BC",
+         "BC2020")
+
+NB2020<-func2020(NB2020,
+         "NB",
+         "NB2020")
+
+```
+
+
+```{r}
+#Merge the columns
+Prov2020 <- bind_rows(NB2020,
+      BC2020,
+      SK2020) 
+
+#Rename columns
+colnames(Prov2020) <- colnames(Prov2021)
+
+#Recode year of birth
+Prov2020<- Prov2020 %>% 
+  mutate(YOB=as.numeric(YOB)+1919)
+
+#Recode Power preference (Fed or Prov)
+Prov2020$Fed_Prov_Power[Prov2020$Fed_Prov_Power == -99] <- NA
+
+Prov2020 <- Prov2020 %>% mutate(Fed_Prov_Power = ifelse(Fed_Prov_Power ==1, "Federal", "Provincial")) #Rename dummy variable for attitudes towards decentralization variable
+
+```
+
+
+```{r}
+#Recoding education
+
+Prov2020$Educ2[Prov2020$Education < 6] <- "Highschool or Less"
+
+Prov2020$Educ2[Prov2020$Education > 5 & Prov2020$Education < 9] <- "Some Post-Secondary"
+
+Prov2020$Educ2[Prov2020$Education == 9] <- "Bachelor"
+
+Prov2020$Educ2[Prov2020$Education == 10 | Prov2020$Education == 11] <- "Post-Graduate Degree"
+
+
+
+Prov2020$Education <- Prov2020$Educ2
+
+Prov2020 <- Prov2020 %>% dplyr::select(-Educ2)
+
+Prov2020 <- Prov2020 %>%
+  mutate(Party_ID_r = dplyr::recode(as.numeric(Party_ID),
+                                           `1` = "Liberal",
+                                              `2` ="Conservative",
+                                                `3` = "NDP",
+                                              `5`= "Green",
+                                              `7` = "Other",
+                                              `8` = "None"))
+```
+
+## 2021 Democracy Checkup
+
+```{r}
+
+#Load data
+DC2021 <- read_dta("521 Data/2021 Democracy Checkup.dta") %>% 
+  #Add Columns that are either missing or need to be manually entered
+  mutate(finance = NA,
+                  survey = "DC2021",
+         #Recode education
+         language = ifelse(dc21_language_3 == 1, 
+                           "Other", 
+                           NA),
+         language = ifelse(dc21_language_1 == 1, 
+                           "English", 
+                           language),
+         language = ifelse(dc21_language_2 == 1, 
+                           "French", 
+                           language),
+         language = ifelse((dc21_language_2 + dc21_language_1) == 2, 
+                           "English & French", 
+                           language)) %>% 
+  #Select Relevant columns
+  dplyr::select(StartDate,
+                                                       dc21_education,
+                         dc21_confidence_inst_2,
+                         dc21_confidence_inst_4,
+                         dc21_yob,
+                         dc21_gender,
+                        dc21_province,
+                         dc21_party_id,
+                         dc21_vote_2019 ,
+                         dc21_vote_choice,
+                         dc21_pol_interest_1 ,
+                         finance,
+                        dc21_fed_gov_satisfa,
+                        language,
+                        survey) %>%   
+  mutate(across(2:13, 
+                as.numeric))
+
+#Rename cols
+
+sum(DC2021$dc21_language_1)
+colnames(DC2021) <- c("Date",
+  "Education",
+  "Conf_Fed",
+  "Conf_Prov",
+  "YOB",
+  "Gender",
+  "Province",
+  "Party_ID",
+  "Prev_Vote",
+  "Vote_Intent",
+  "Interest",
+  "Finance",
+  "Fed_Sat",
+  "Language",
+  "Survey",
+  "Fed_Prov_Power")
+
+
+#Recode Education
+DC2021$Educ2[DC2021$Education < 6] <- "Highschool or Less"
+
+DC2021$Educ2[DC2021$Education > 5 & DC2021$Education < 9] <- "Some Post-Secondary"
+
+DC2021$Educ2[DC2021$Education == 9] <- "Bachelor"
+
+DC2021$Educ2[DC2021$Education == 10 | DC2021$Education == 11] <- "Post-Graduate Degree"
+
+DC2021$Education <- DC2021$Educ2
+DC2021 <- DC2021 %>% dplyr::select(-Educ2)
+table(DC2021$YOB)
+
+
+DC2021$YOB <- DC2021$YOB + 1919
+```
+
+
+## 2021 CES
+
+```{r}
+#Load data and select relevant variables
+CES2021<-read_dta("521 Data/2021 CES.dta") %>% 
+  mutate(survey = "CES2021") %>% 
+  dplyr::select(pes21_StartDate,
+                          cps21_education,
+                          pes21_conf_inst1_1,
+                          pes21_conf_inst1_2,
+                          cps21_yob,
+                          cps21_genderid,
+                          cps21_province,
+                          cps21_fed_id,
+                          cps21_vote_2019,
+                          pes21_votechoice2021,
+                          cps21_interest_gen_1,
+                          cps21_ownfinanc_fed,
+                          cps21_fed_gov_sat,
+                 pes21_lang,
+                
+                          survey,
+                pes21_provfed,
+                cps21_prov_id,
+                cps21_prov_gov_sat) %>%  
+  mutate(across(2:14, as.numeric)) 
+
+#Rename columns
+colnames(CES2021) <- c(colnames(DC2021),
+                       "Fed_Prov_Power", "Provincial_PID", "Prov_Sat")
+CES2021$Language2[CES2021$Language ==1] <- "English"
+CES2021$Language2[CES2021$Language ==2] <- "French"
+CES2021$Language2[CES2021$Language >2] <- "Other"
+
+CES2021$Language <- CES2021$Language2
+```
+
+
+```{r}
+#Remove last column as it is extraneous
+CES2021<-CES2021[-19]
+```
+
+
+```{r}
+
+#Recode decentralization variable
+CES2021 <- CES2021 %>% mutate(Fed_Prov_Power = ifelse(Fed_Prov_Power ==1, "Federal", "Provincial"))
+
+#Recoding education
+
+CES2021$Educ2[CES2021$Education < 6] <- "Highschool or Less"
+
+CES2021$Educ2[CES2021$Education > 5 & CES2021$Education < 9] <- "Some Post-Secondary"
+
+CES2021$Educ2[CES2021$Education == 9] <- "Bachelor"
+
+CES2021$Educ2[CES2021$Education == 10 | CES2021$Education == 11] <- "Post-Graduate Degree"
+
+CES2021$Education <- CES2021$Educ2
+
+#Remove the second education variable as it is now extraneous
+CES2021 <- CES2021 %>% dplyr::select(-Educ2)
+
+#Recode YOB to be the current number plus 1919
+
+CES2021$YOB <- CES2021$YOB + 1919
+
+#Recode provincial party ID
+CES2021 <- CES2021 %>%  mutate(Provincial_PID
+ = dplyr::recode(as.numeric(Provincial_PID),
+                                           `1` = "Liberal",
+                                              `2` ="NDP",
+                                                `3` = "Green",
+                                              `4`= "CAQ",
+                                              `5` = "PQ",
+                                              `6` = "QS",
+                                              `7` = "UCP",
+                                              `8` = "Alberta",
+                                              `9` = "Other",
+                                              `10` = "Saskachewan",
+                                              `11` = "PC",
+                                              `12` = "Other",
+                                              `13` = "Yukon",
+                 `14` = "Other",
+                 `15` = "None"
+                 ))
+
+```
+
+##2020 DC
+```{r}
+
+
+#Load data and select relevant variables
+DC2020<-read_dta("521 Data/2020 Democracy Checkup.dta") %>% 
+  mutate(finance = NA,
+                  survey = "DC2020") %>% 
+  mutate(language = ifelse(dc20_language_3 == 1, "Other", 
+                           NA),
+         language = ifelse(is.na(dc20_language_1) == F, 
+                           "English", 
+                           language),
+         language = ifelse(is.na(dc20_language_2) == F, 
+                           "French", 
+                           language),
+         language = ifelse(is.na((dc20_language_2 + 
+                                    dc20_language_1)) == F, 
+                           "English & French", 
+                           language)) %>% 
+  dplyr::select(StartDate,
+                       dc20_education,
+                         dc20_confidence_inst_2,
+                         dc20_confidence_inst_4,
+                         dc20_yob,
+                         dc20_gender,
+                        dc20_province,
+                         dc20_party_id,
+                         dc20_vote_2019 ,
+                         dc20_vote_choice,
+                         dc20_pol_interest_1 ,
+                         finance,
+                        dc20_fed_gov_satisfa,
+               language,
+                        survey) %>%   
+  
+  mutate(across(2:13, 
+                as.numeric))
+
+colnames(DC2020) <- colnames(CES2021)
+
+
+      
+sum((DC2020$dc20_language_2 + 
+       DC2020$dc20_language_1) == 2,
+    na.rm = T)
+
+#Recode education
+DC2020$Educ2[DC2020$Education < 6] <- "Highschool or Less"
+
+DC2020$Educ2[DC2020$Education > 5 & DC2020$Education < 9] <- "Some Post-Secondary"
+
+DC2020$Educ2[DC2020$Education == 9] <- "Bachelor"
+
+DC2020$Educ2[DC2020$Education == 10 | DC2020$Education == 11] <- "Post-Graduate Degree"
+
+DC2020$Education <- DC2020$Educ2
+
+DC2020 <- DC2020 %>% dplyr::select(-Educ2)
+
+
+#Recode Year of birth variable
+
+DC2020$YOB <- DC2020$YOB + 1919
+
+
+```
+
+
+##2019 DC
+
+```{r}
+#Load data and select variables
+DC2019 <- read_dta("521 Data/2019 Democracy Checkup.dta") %>% 
+  mutate(finance = NA,
+                  survey = "DC2019",
+         
+         language_r = ifelse(language == 68, 
+                             "English", NA),
+         language_r = ifelse(language == 69, 
+                             "French", 
+                             language_r),
+         language_r = ifelse(language > 69, 
+                             "Other", 
+                             language_r)) %>% 
+  dplyr::select(StartDate,
+                                                       education,
+                         confidence_inst_2,
+                         confidence_inst_4,
+                         yob,
+                         gender,
+                        province,
+                         party_id,
+                         vote_2015 ,
+                         vote_intention,
+                         political_interest_1  ,
+                         finance,
+                        fed_gov_satisfaction,
+                language_r,
+                        survey) %>%   
+  mutate(across(2:13, 
+                as.numeric))
+
+#Rename columns
+
+colnames(DC2019) <- colnames(CES2021)
+
+
+#Recode the province variable
+DC2019 <- DC2019 %>% 
+  mutate(Province = Province - 13) %>% 
+  mutate(Province = dplyr::recode(Province,
+                                           `1` = "AB",
+                                              `2` ="BC",
+                                                `3` = "MB",
+                                              `4`= "NB",
+                                              `5` = "NL",
+                                              `6` = "NT",
+                                              `7` = "NS",
+                                              `8` = "NU",
+                                              `9` = "ON",
+                                              `10` = "PEI",
+                                              `11` = "QC",
+                                              `12` = "SK",
+                                              `13` = "YT")) %>% mutate(YOB=YOB+1919,
+                                                                       Date = as.Date(Date))  
+
+#Recode education
+DC2019$Educ2[DC2019$Education < 6] <- "Highschool or Less"
+
+DC2019$Educ2[DC2019$Education > 5 & DC2019$Education < 9] <- "Some Post-Secondary"
+
+DC2019$Educ2[DC2019$Education == 9] <- "Bachelor"
+
+DC2019$Educ2[DC2019$Education == 10 | DC2019$Education == 11] <- "Post-Graduate Degree"
+
+DC2019$Education <- DC2019$Educ2
+
+DC2019 <- DC2019 %>% dplyr::select(-Educ2)
+
+
+```
+
+##2019 CES
+
+```{r}
+#Load data and select relevant variables
+CES2019 <- read_dta("521 Data/2019 CES.dta") %>% 
+  mutate(survey = "CES2019",
+                                                       language_r = ifelse(pes19_lang  == 68, 
+                                                                           "English", 
+                                                                           NA),
+         language_r = ifelse(pes19_lang  == 69, "French", language_r),
+         language_r = ifelse(pes19_lang  > 69, "Other", language_r)) %>% 
+  dplyr::select(cps19_StartDate,
+                          cps19_education,
+                          pes19_conf_inst1_1,
+                          pes19_conf_inst1_2,
+                          cps19_yob,
+                          cps19_gender,
+                          cps19_province,
+                          cps19_fed_id,
+                          cps19_vote_2015,
+                          pes19_votechoice2019,
+                          cps19_interest_gen_1,
+                          cps19_ownfinanc_fed,
+                          cps19_fed_gov_sat,
+                          language_r,
+                        
+                          survey,
+                          pes19_provfed,
+                cps19_prov_id) %>% 
+  mutate(across(2:13, as.numeric)) %>% 
+  mutate(cps19_province = cps19_province - 13)
+
+#Recode provincial party ID
+CES2019 <- CES2019 %>%  mutate(cps19_prov_id
+ = dplyr::recode(as.numeric(cps19_prov_id),
+                                           `281` = "Liberal",
+                                              `282` ="NDP",
+                                                `283` = "Green",
+                                              `284`= "CAQ",
+                                              `285` = "PQ",
+                                              `286` = "QS",
+                                              `288` = "UCP",
+                                              `289` = "Alberta",
+                 `289` = "Conservative", 
+                                              `292` = "PC",
+                                              `291` = "Saskachewan",
+                                              `298` = "Other",
+                                              `295` = "Other",
+                                              `293` = "Yukon",
+                 `296` = "None"
+                 ))
+
+
+```
+
+
+
+
+
+
+
+```{r}
+
+#Rename columns
+colnames(CES2019)<-colnames(CES2021)
+
+#Recode Year of Birth
+CES2019$YOB <- CES2019$YOB + 1919
+
+#Rename DC column
+colnames(DC2021)<-colnames(CES2021)
+
+#Recode education
+
+CES2019$Educ2[CES2019$Education < 6] <- "Highschool or Less"
+
+CES2019$Educ2[CES2019$Education > 5 & CES2019$Education < 9] <- "Some Post-Secondary"
+
+CES2019$Educ2[CES2019$Education == 9] <- "Bachelor"
+
+CES2019$Educ2[CES2019$Education == 10 | CES2019$Education == 11] <- "Post-Graduate Degree"
+
+CES2019$Education <- CES2019$Educ2
+
+CES2019 <- CES2019 %>% dplyr::select(-Educ2)
+
+
+```
+
+
+```{r}
+
+#merge together latest surveys
+latestsurveys<-bind_rows(CES2021 %>%  
+                           dplyr::mutate(across(everything(), 
+                                                as.character)),
+      DC2021 %>%  dplyr::mutate(across(everything(), 
+                                       as.character)),
+      DC2020 %>%  dplyr::mutate(across(everything(), 
+                                       as.character)),
+      CES2019 %>%  dplyr::mutate(across(everything(), 
+                                        as.character)),
+      DC2019 %>%  dplyr::mutate(across(everything(), 
+                                       as.character))) %>% 
+  mutate(Province = dplyr::recode(Province,
+                                           `1` = "AB",
+                                              `2` ="BC",
+                                                `3` = "MB",
+                                              `4`= "NB",
+                                              `5` = "NL",
+                                              `6` = "NT",
+                                              `7` = "NS",
+                                              `8` = "NU",
+                                              `9` = "ON",
+                                              `10` = "PEI",
+                                              `11` = "QC",
+                                              `12` = "SK",
+                                              `13` = "YT")) %>% 
+  mutate(
+                                                                       Date = as.Date(Date))
+
+latestsurveys$Party_ID[latestsurveys$Party_ID>6 | latestsurveys$Party_ID<0] <- NA
+
+
+latestsurveys<-latestsurveys %>%
+  mutate(Party_ID_r = dplyr::recode(Party_ID,
+                                           `1` = "Liberal",
+                                              `2` ="Conservative",
+                                                `3` = "NDP",
+                                              `4`= "BQ",
+                                              `5` = "Green",
+                                              `6` = "Other"))
+
+
+```
+
+
+##2011-2015 - Provincial Election Studies 
+```{r}
+#load dara
+CPEP2014 <- read_dta("521 Data/2014 CPEP.dta")
+
+```
+
+
+```{r}
+#Recode to numeric
+CPEP2014$q130_NB <- as.numeric(CPEP2014$q130_NB)
+
+CPEP2014$q130 <- as.numeric(CPEP2014$q130)
+
+CPEP2014$q130AB <- as.numeric(CPEP2014$q130AB)
+
+#Select relevant variables
+
+CPEP2014 <-  CPEP2014 %>% 
+  mutate(intent=NA,
+                                                           finance = NA,
+                                                           interest = NA,
+                                                           survey = "CPEP",
+                                                           YOB = ifelse(is.na(q130_NB) ==T,
+                                 q130,
+                                 q130_NB),
+                    YOB = ifelse(is.na(YOB) ==T,
+                                 q130AB,
+                                 q130)) %>% 
+  dplyr::select(interview_start,
+                                                                 q80,
+                                                                 q21_6,
+                                                                 q21_7,
+                                                                YOB,
+                                                                q73,
+                                                                Province2,
+                                                                q108,
+                                                                q113,
+                                                                intent,
+                                                          interest,
+                                                                finance,
+                                                                q34,
+                                                           q194_QC,
+                                                                survey,
+                                                          q67_1,
+                q104,
+                q104_QC,
+                q104AB) %>%  
+  mutate(across(2:13, as.numeric)) %>% #Recode provinces
+  mutate(Province2 = dplyr::recode(Province2,
+                                           `1` = "ON",
+                                              `2` ="PEI",
+                                                `3` = "NL",
+                                              `4`= "MB",
+                                              `5` = "SK",
+                                              `6` = "AB",
+                                              `7` = "QC",
+                                              `8` = "NS",
+                                              `9` = "BC",
+                                              `10` = "NS"))
+#Recode provincial party ID
+
+CPEP2014$Province_PID[CPEP2014$q104 == 1] <- "Liberal"
+CPEP2014$Province_PID[CPEP2014$q104 == 2] <- "PC"
+CPEP2014$Province_PID[CPEP2014$q104 == 3] <- "NDP"
+CPEP2014$Province_PID[CPEP2014$q104 == 4] <- "Green"
+CPEP2014$Province_PID[CPEP2014$q104 == 5] <- "Other"
+CPEP2014$Province_PID[CPEP2014$q104 == 6] <- "None"
+CPEP2014$Province_PID[CPEP2014$q104 == 7] <- "Saskachewan"
+
+
+CPEP2014$Province_PID[CPEP2014$q104_QC == 1] <- "Liberal"
+CPEP2014$Province_PID[CPEP2014$q104_QC == 2] <- "PQ"
+CPEP2014$Province_PID[CPEP2014$q104_QC == 3] <- "CAQ"
+CPEP2014$Province_PID[CPEP2014$q104_QC == 4] <- "QS"
+CPEP2014$Province_PID[CPEP2014$q104_QC == 5] <- "ON"
+CPEP2014$Province_PID[CPEP2014$q104_QC == 6] <- "Other"
+CPEP2014$Province_PID[CPEP2014$q104_QC == 7] <- "None"
+
+CPEP2014$Province_PID[CPEP2014$q104AB == 1] <- "Liberal"
+CPEP2014$Province_PID[CPEP2014$q104AB == 2] <- "PC"
+CPEP2014$Province_PID[CPEP2014$q104AB == 3] <- "Wildrose"
+CPEP2014$Province_PID[CPEP2014$q104AB == 4] <- "NDP"
+CPEP2014$Province_PID[CPEP2014$q104AB == 5] <- "Alberta"
+CPEP2014$Province_PID[CPEP2014$q104AB == 6] <- "None"
+
+CPEP2014<-CPEP2014 %>% dplyr::select(-c(q104, q104AB, q104_QC))
+#Rename columns
+colnames(CPEP2014) <- c("Date",
+  "Education",
+  "Conf_Fed",
+  "Conf_Prov",
+  "YOB",
+  "Gender",
+  "Province",
+  "Party_ID",
+  "Prev_Vote",
+  "Vote_Intent",
+  "Interest",
+  "Finance",
+  "Fed_Sat",
+  "Language",
+  "Survey",
+  "Fed_Prov_Power",
+  "Provincial_PID")
+
+#Recode attitudes towards decentralization variable so less than 5 equals centralized and more than 5 equals decentralized
+
+CPEP2014$Fed_Prov_Power_r[CPEP2014$Fed_Prov_Power >5] <- 1
+
+CPEP2014$Fed_Prov_Power_r[CPEP2014$Fed_Prov_Power <5] <- 2
+
+
+CPEP2014$Fed_Prov_Power <- CPEP2014$Fed_Prov_Power_r
+
+CPEP2014
+
+#Recode party ID
+
+CPEP2014 <- CPEP2014 %>% 
+  dplyr::select(-Fed_Prov_Power_r) %>% 
+  mutate(Party_ID_r = dplyr::recode(Party_ID,
+                                           `1` = "Liberal",
+                                              `2` ="Conservative",
+                                                `3` = "NDP",
+                                              `4`= "Green",
+                                              `5` = "Other",
+                                              `6` = "Other"))
+
+```
+
+
+```{r}
+#Education
+CPEP2014$Educ2[CPEP2014$Education < 3] <- "Highschool or Less"
+
+CPEP2014$Educ2[CPEP2014$Education > 2 & CPEP2014$Education < 6] <- "Some Post-Secondary"
+
+CPEP2014$Educ2[CPEP2014$Education == 6] <- "Bachelor"
+
+CPEP2014$Educ2[CPEP2014$Education == 7 | CPEP2014$Education == 8] <- "Post-Graduate Degree"
+
+CPEP2014$Education <- CPEP2014$Educ2
+
+CPEP2014 <- CPEP2014 %>% dplyr::select(-Educ2)
+
+
+#Remove all year of birth before 1900
+CPEP2014 <- CPEP2014 %>% mutate(YOB = ifelse(YOB < 1900, NA, YOB))
+
+table(CPEP2014$Province)
+
+CPEP2014 <- CPEP2014 %>% separate(Date, sep = "-", into =  "Year", remove = F)%>%  mutate(Survey = paste(Province, Year, sep = ""))
+
+#Recode survey variable
+CPEP2014$Survey[CPEP2014$Survey == "QCNA"] <- "QC2014"
+CPEP2014$Survey[CPEP2014$Survey == "QCNA"] <- "QC2014"
+CPEP2014$Survey[CPEP2014$Survey == "NSNA"] <- "NS2013"
+CPEP2014$Survey[CPEP2014$Survey == "ONNA"] <- "ON2014"
+CPEP2014$Survey[CPEP2014$Survey == "ABNA"] <- "AB2015"
+
+```
+
+
+```{r}
+#Recode language
+CPEP2014<-CPEP2014 %>% 
+  mutate(Language_r = ifelse( Language  == 1, 
+                              "English", 
+                              NA),
+         Language_r = ifelse( Language == 2, 
+                              "French", 
+                              Language_r),
+        Language_r= ifelse(is.na(Language), 
+                           "Other", 
+                           Language_r),
+          Language_r= ifelse(is.na(Language), 
+                             NA, 
+                             Language_r))
+CPEP2014$Language<-CPEP2014$Language_r
+
+CPEP2014<-CPEP2014 %>% dplyr::select(-Language_r)
+```
+
+
+
+##2011 CES
+
+```{r}
+
+#Load data
+CES2011 <-  read_dta("521 Data/2011 CES.dta") %>% 
+  mutate(interest = NA,
+                  survey = "CES2011",
+                  language_r = ifelse(CPS11_90  == 1, "English", NA),
+         language_r = ifelse(CPS11_90 == 5, "French", language_r),
+         language_r = ifelse(is.na(language_r), "Other", language_r),
+          language_r = ifelse(is.na(CPS11_90), NA, language_r)) %>% 
+  dplyr::select(CPS_INTYEAR11,
+                          CPS11_79,
+                          MBS11_D2h,
+                          MBS11_D2i,
+                           CPS11_78,
+                          MBS11_L2,
+                         PROVINCE11,
+                         CPS11_71,
+                         CPS11_74,
+                         CPS11_11,
+                         interest,
+                         CPS11_67,
+                         CPS11_17,
+                         language_r,
+                         survey,
+                         PES11_55) %>%   
+  mutate(across(2:13, as.numeric)) 
+
+
+colnames(CES2011) <- colnames(CES2021)
+
+CES2011<-CES2011%>% mutate(Province = dplyr::recode(Province,
+                                           `10` = "NL",
+                                              `11` ="PEI",
+                                                `12` = "NS",
+                                              `13`= "NB",
+                                              `24` = "QC",
+                                              `35` = "ON",
+                                              `46` = "MB",
+                                              `47` = "SK",
+                                              `48` = "AB",
+                                              `59` = "BC",
+                                           `60` = "YT",
+                                           `61` = "NT",
+                                           `62` = "NU"))  %>% 
+  mutate(Party_ID_r = dplyr::recode(Party_ID,
+                                           `1` = "Liberal",
+                                              `2` ="Conservative",
+                                                `3` = "NDP",
+                                              `4`= "BQ",
+                                              `5` = "Green",
+                                              `6` = "Other"))
+
+
+
+CES2011 <- CES2011 %>% mutate(Fed_Prov_Power2 = ifelse(Fed_Prov_Power == 1, "Federal", NA),
+                   Fed_Prov_Power = ifelse(Fed_Prov_Power == 5, "Provincial", Fed_Prov_Power2)) %>% dplyr::select(-Fed_Prov_Power2
+                                                                                                           )
+
+
+#Education
+
+
+CES2011$Educ2[CES2011$Education < 6] <- "Highschool or Less"
+
+CES2011$Educ2[CES2011$Education > 5 & CES2011$Education < 9] <- "Some Post-Secondary"
+
+CES2011$Educ2[CES2011$Education == 9] <- "Bachelor"
+
+CES2011$Educ2[CES2011$Education == 10 | CES2011$Education == 11] <- "Post-Graduate Degree"
+
+CES2011$Education <- CES2011$Educ2
+
+CES2011 <- CES2011 %>% dplyr::select(-Educ2)
+
+
+
+```
+
+
+##2008 CES
+
+
+
+
+```{r}
+
+CES2004_2008 <- read_dta("521 Data/2004-2008 CES.dta")
+
+CES2008<-CES2004_2008 %>% 
+  mutate(ces08_CPS_F2B = ifelse(ces08_CPS_F2B == 1, 0,  ces08_CPS_F2B),
+                        finance= ifelse(is.na(ces08_CPS_F2B) == F, ces08_CPS_F2B, ces08_CPS_F2A),
+                        Year = 2008,
+                        survey = "CES2008",
+                  language_r = ifelse( ces08_CPS_S17  == 1, "English", NA),
+         language_r = ifelse( ces08_CPS_S17 == 5, "French", language_r),
+         language_r = ifelse(is.na(language_r), "Other", language_r),
+         language_r = ifelse(is.na(ces08_CPS_S17),
+                             NA, language_r)) %>% 
+  dplyr::select(Year,
+                                                              ces08_CPS_S3,
+                               ces08_MBS_DH,
+                               ces08_MBS_DI,
+                               YEARofBIRTH,
+                               GENDER,
+                               ces08_PROVINCE,
+                               ces08_CPS_Q1A,
+                               ces08_CPS_Q6B,
+                              ces08_CPS_B4N,
+                             ces08_CPS_A4,
+                             finance,
+                             ces08_CPS_I0,
+                              language_r,
+                             survey,
+                             ces08_PES_G13
+                             ) %>% 
+  subset(is.na(ces08_PROVINCE
+) == F) %>%   
+  mutate(across(2:13, as.numeric)) %>%   
+  mutate(across(2:13, as.numeric)) 
+
+
+colnames(CES2008) <- colnames(CES2021)
+
+CES2008<-CES2008 %>% 
+  mutate(Province = dplyr::recode(Province,
+                                           `10` = "NL",
+                                              `11` ="PEI",
+                                                `12` = "NS",
+                                              `13`= "NB",
+                                              `24` = "QC",
+                                              `35` = "ON",
+                                              `46` = "MB",
+                                              `47` = "SK",
+                                              `48` = "AB",
+                                              `59` = "BC",
+                                           `60` = "YT",
+                                           `61` = "NT",
+                                           `62` = "NU"))  %>% 
+  mutate(Party_ID_r = dplyr::recode(Party_ID,
+                                           `1` = "Liberal",
+                                              `2` ="Conservative",
+                                                `3` = "NDP",
+                                              `4`= "BQ",
+                                              `5` = "Green",
+                                              `6` = "Other"))
+ 
+CES2008 <- CES2008 %>% mutate(Fed_Prov_Power2 = ifelse(Fed_Prov_Power == 1, "Federal", NA),
+                   Fed_Prov_Power = ifelse(Fed_Prov_Power == 5, "Provincial", Fed_Prov_Power2)) %>% dplyr::select(-Fed_Prov_Power2
+                                                                                                           )
+
+#Education
+
+CES2008$Educ2[CES2008$Education < 6] <- "Highschool or Less"
+
+CES2008$Educ2[CES2008$Education > 5 & CES2008$Education < 9] <- "Some Post-Secondary"
+
+CES2008$Educ2[CES2008$Education == 9] <- "Bachelor"
+
+CES2008$Educ2[CES2008$Education == 10 | CES2008$Education == 11] <- "Post-Graduate Degree"
+
+CES2008$Education <- CES2008$Educ2
+
+CES2008 <- CES2008 %>% dplyr::select(-Educ2)
+
+
+
+```
+
+
+##2004 CES
+```{r 2004}
+CES2004<-CES2004_2008 %>% 
+  mutate(ces04_CPS_F2B = ifelse(ces04_CPS_F2B == 1, 0,  ces04_CPS_F2B),
+                        finance= ifelse(is.na(ces04_CPS_F2B) == F, ces04_CPS_F2B, ces04_CPS_F2A),
+                        Year = 2004,
+                        survey = "CES2004",
+                        language_r = ifelse( ces04_CPS_S17  == 1, "English", NA),
+         language_r = ifelse( ces04_CPS_S17 == 5, "French", 
+                              language_r),
+         language_r = ifelse(is.na(language_r), 
+                             "Other", 
+                             language_r),
+         language_r = ifelse(is.na(ces04_CPS_S17),
+                             NA, language_r)) %>% 
+  dplyr::select(Year,
+                                                              ces04_CPS_S3,
+                               ces04_MBS_DH,
+                               ces04_MBS_DI,
+                               YEARofBIRTH,
+                               GENDER,
+                               ces04_PR,
+                               ces04_CPS_Q1A_3,
+                               ces04_CPS_Q6,
+                              ces06_CPS_B4,
+                             ces04_CPS_A4,
+                             finance,
+                             ces04_CPS_P18,
+                 language_r,
+                             survey
+                             ) %>% subset(is.na(ces04_PR
+) == F) %>%   mutate(across(2:13, as.numeric)) 
+ 
+
+
+
+colnames(CES2004) <-colnames(CES2021)
+
+CES2004 <-CES2004   %>% mutate(Province = dplyr::recode(Province,
+                                           `10` = "NL",
+                                              `11` ="PEI",
+                                                `12` = "NS",
+                                              `13`= "NB",
+                                              `24` = "QC",
+                                              `35` = "ON",
+                                              `46` = "MB",
+                                              `47` = "SK",
+                                              `48` = "AB",
+                                              `59` = "BC",
+                                           `60` = "YT",
+                                           `61` = "NT",
+                                           `62` = "NU")) %>% 
+  mutate(Party_ID_r = dplyr::recode(Party_ID,
+                                           `1` = "Liberal",
+                                              `2` ="Conservative",
+                                                `3` = "NDP",
+                                              `4`= "BQ",
+                                              `5` = "Alliance",
+                                              `6` = "PC",
+                           `8` = "Green",
+                           `97` = "Other")) 
+
+
+CES2004$Educ2[CES2004$Education < 6] <- "Highschool or Less"
+
+CES2004$Educ2[CES2004$Education > 5 & CES2004$Education < 9] <- "Some Post-Secondary"
+
+CES2004$Educ2[CES2004$Education == 9] <- "Bachelor"
+
+CES2004$Educ2[CES2004$Education == 10 | CES2004$Education == 11] <- "Post-Graduate Degree"
+
+CES2004$Education <- CES2004$Educ2
+
+CES2004 <- CES2004 %>% dplyr::select(-Educ2)
+
+```
+
+
+##2000 CES
+
+```{r 2000}
+CES2000 <- read_dta("521 Data/2000 CES.dta") %>%
+  mutate(cpsc3b = ifelse(cpsc3b == 1, 0,  cpsc3b),
+                        finance= ifelse(is.na(cpsc3b) == F, cpsc3b, cpsc3c),
+                                        satisfaction = NA,
+         survey = "CES2000",
+         language_r = ifelse(  cpsm15  == 1, "English", NA),
+         language_r = ifelse(  cpsm15 == 5, "French", 
+                              language_r),
+         language_r = ifelse(is.na(language_r), 
+                             "Other", 
+                             language_r),
+         language_r = ifelse(is.na(cpsm15),
+                             NA, language_r)) %>% 
+  
+  dplyr::select(cpsyear,
+                                                  cpsm3,
+                                                  mbsdh,
+                                                  mbsdi,
+                          cpsage,
+                          cpsrgen,
+                          province,
+                          cpsk1a,
+                          cpsk6,
+                          cpsa4,
+                cpsb5,
+                          finance,
+                satisfaction,
+                language_r,
+                survey 
+                
+                          ) %>%   mutate(across(2:13, as.numeric))
+
+
+colnames(CES2000) <-colnames(CES2021)
+
+CES2000<-CES2000   %>% mutate(Province = dplyr::recode(Province,
+                                           `10` = "NL",
+                                              `11` ="PEI",
+                                                `12` = "NS",
+                                              `13`= "NB",
+                                              `24` = "QC",
+                                              `35` = "ON",
+                                              `46` = "MB",
+                                              `47` = "SK",
+                                              `48` = "AB",
+                                              `59` = "BC",
+                                           `60` = "YT",
+                                           `61` = "NT",
+                                           `62` = "NU")) %>% 
+  mutate(Party_ID_r = dplyr::recode(Party_ID,
+                                           `1` = "Liberal",
+                                              `2` ="BQ",
+                                                `3` = "Alliance",
+                                              `4`= "Conservative",
+                                              `5` = "NDP",
+                           `97` = "Other")) 
+
+
+
+CES2000$Educ2[CES2000$Education < 6] <- "Highschool or Less"
+
+CES2000$Educ2[CES2000$Education > 5 & CES2000$Education < 9] <- "Some Post-Secondary"
+
+CES2000$Educ2[CES2000$Education == 9] <- "Bachelor"
+
+CES2000$Educ2[CES2000$Education == 10 | CES2000$Education == 11] <- "Post-Graduate Degree"
+
+CES2000$Education <- CES2000$Educ2
+
+CES2000 <- CES2000 %>% dplyr::select(-Educ2)
+
+
+```
+
+##1997 CES
+
+
+```{r 1997}
+CES1997 <- read_dta("521 Data/1997 CES.dta") %>% 
+  mutate(year = 1997,
+                                                        satisfaction = NA,
+                                                        survey = "CES1997",
+                                                        language_r = ifelse(  cpsm15  == 5, "English", NA),
+         language_r = ifelse(  cpsm15 == 1, "French", 
+                              language_r),
+         language_r = ifelse(is.na(language_r), 
+                             "Other", 
+                             language_r),
+         language_r = ifelse(is.na(cpsm15),
+                             NA, language_r)) %>% 
+  dplyr::select(year,
+                                                               cpsm3,
+                                                               mbsf8,
+                                                               mbsf9,
+                                                               pesage,
+                                                               pesrgen,
+                                                               province,
+                                                              cpsk1,
+                                                              cpsk6,
+                                                             cpsa4,
+                                                             cpsb5,
+                                                             cpsc3,
+                                                             satisfaction,
+                                                             language_r,
+                                                             survey) %>% 
+  mutate(across(2:13, as.numeric))
+
+colnames(CES1997) <-colnames(CES2021)
+
+CES1997<-CES1997 %>% 
+  mutate(Province = dplyr::recode(Province,
+                                           `10` = "NL",
+                                              `11` ="PEI",
+                                                `12` = "NS",
+                                              `13`= "NB",
+                                              `24` = "QC",
+                                              `35` = "ON",
+                                              `46` = "MB",
+                                              `47` = "SK",
+                                              `48` = "AB",
+                                              `59` = "BC",
+                                           `60` = "YT",
+                                           `61` = "NT",
+                                           `62` = "NU")) %>% 
+  mutate(Party_ID_r = dplyr::recode(Party_ID,
+                                           `1` = "Liberal",
+                                              `2` ="Conservative",
+                                                `3` = "NDP",
+                                              `4`= "Reform",
+                                              `5` = "BQ",
+                           `6` = "Other")) 
+
+
+CES1997$Educ2[CES1997$Education < 6] <- "Highschool or Less"
+
+CES1997$Educ2[CES1997$Education > 5 & CES1997$Education < 9] <- "Some Post-Secondary"
+
+CES1997$Educ2[CES1997$Education == 9] <- "Bachelor"
+
+CES1997$Educ2[CES1997$Education == 10 | CES1997$Education == 11] <- "Post-Graduate Degree"
+
+CES1997$Education <- CES1997$Educ2
+
+CES1997 <- CES1997 %>% dplyr::select(-Educ2)
+```
+
+##1993 CES
+
+
+```{r 1993}
+CES1993 <- read_dta("521 Data/1993 CES.dta") %>% mutate(year = 1993,
+                                                        satisfy=NA,
+                                                        survey = "CES1993",
+                                                        interest = NA,
+                                                        language_r = ifelse(  REFN16  == 3, "English", NA),
+         language_r = ifelse(REFN16 == 1, "French", 
+                              language_r),
+         language_r = ifelse(is.na(language_r), 
+                             "Other", 
+                             language_r),
+         language_r = ifelse(is.na(REFN16),
+                             NA, language_r)) %>% dplyr::select(year,
+                                                                                       CPSO3,
+                                                                                       MBSF10,
+                                                                                       MBSF11, 
+                                                                                       MBSAGE,
+                                                                                       MBSRGEN,
+                                                                                       CPSPROV, REFI1C,REFI3, CPSA3,
+                                                                                       interest,
+                                                                                       CPSC3, 
+                                                                                       satisfy,
+                                                                language_r,
+                                                                                       survey
+                                                               ) %>%   mutate(across(2:13, as.numeric))
+
+
+
+colnames(CES1993) <-colnames(CES2021)
+
+CES1993<-CES1993 %>% mutate(Province = dplyr::recode(Province,
+                                           `0` = "NL",
+                                              `1` ="PEI",
+                                                `2` = "NS",
+                                              `3`= "NB",
+                                              `4` = "QC",
+                                              `5` = "ON",
+                                              `6` = "MB",
+                                              `7` = "SK",
+                                              `8` = "AB",
+                                              `9` = "BC")) %>% 
+  mutate(Party_ID_r = dplyr::recode(Party_ID,
+                                           `1` = "Liberal",
+                                              `2` ="Conservative",
+                                                `3` = "NDP",
+                                              `4`= "Reform",
+                                              `5` = "BQ",
+                           `6` = "Other"))  
+
+
+
+#Education
+
+CES1993$Educ2[CES1993$Education < 6] <- "Highschool or Less"
+
+CES1993$Educ2[CES1993$Education > 5 & CES1993$Education < 9] <- "Some Post-Secondary"
+
+CES1993$Educ2[CES1993$Education == 9] <- "Bachelor"
+
+CES1993$Educ2[CES1993$Education == 10 | CES1993$Education == 11] <- "Post-Graduate Degree"
+
+CES1993$Education <- CES1993$Educ2
+
+CES1993 <- CES1993 %>% dplyr::select(-Educ2)
+
+
+ 
+``` 
+
+##1984 CES
+**I initially planned on using the 1984 CES data but decided to exclude it because the survey question for confidence was different**
+
+```{r 1984}
+
+# CES1984 <- as.data.set(spss.portable.file('521 Data/ELEC84.POR'))
+# 
+# 
+# 
+# 
+# CES1984<-as.data.frame(CES1984) %>% mutate(Year = 1984,
+#                                            interest = NA,
+#                                            finance=NA,
+#                                            satisfaction = NA,
+#                                            Survey = "CES1984") %>% dplyr::select(Year,
+#                VAR362,
+#                VAR036,
+#                VAR353,
+#                VAR437,
+#                VAR456,
+#                 VAR362,
+#                VAR463,
+#                VAR081,
+#                VAR157,
+#                VAR125,
+#                interest,
+#                finance,
+#                satisfaction,
+#                VAR375,
+#                Survey) 
+# 
+# colnames(CES1984) <- colnames(Prov2020)
+```
+
+```{r 1984 2.0}
+# CES1984$Conf_Fed_r[CES1984$Conf_Fed == "AGREE SOMEWHAT"] <- 2
+# CES1984$Conf_Fed_r[CES1984$Conf_Fed == "STRONGLY AGREE"] <- 1
+# CES1984$Conf_Fed_r[CES1984$Conf_Fed == "DISAGREE SOMEWHAT"] <- 3
+# CES1984$Conf_Fed_r[CES1984$Conf_Fed == "STRONGLY DISAGREE"] <- 4
+# CES1984$Conf_Fed<- as.numeric(CES1984$Conf_Fed_r)
+# 
+# 
+# 
+# CES1984$Conf_Prov_r[CES1984$Conf_Prov == "AGREE SOMEWHAT"] <- 2
+# CES1984$Conf_Prov_r[CES1984$Conf_Prov == "STRONGLY AGREE"] <- 1
+# CES1984$Conf_Prov_r[CES1984$Conf_Prov == "DISAGREE SOMEWHAT"] <- 3
+# CES1984$Conf_Prov_r[CES1984$Conf_Prov == "STRONGLY DISAGREE"] <- 4
+# CES1984$Conf_Prov <- as.numeric(CES1984$Conf_Prov_r)
+# 
+# 
+# CES1984 <-CES1984 %>% dplyr::select(-c(Conf_Prov_r, 
+#                              Conf_Fed_r))
+# 
+# 
+# CES1984<-CES1984 %>% mutate(Party_ID_r = Party_ID)
+# 
+# 
+# table(CES1984$Province)
+# 
+# CES1984$Province_r[CES1984$Province == "NEWFOUNDLAND"] <- "NL" 
+# CES1984$Province_r[str_detect(CES1984$Province, "PRINCE")] <- "PEI"
+# CES1984$Province_r[str_detect(CES1984$Province, "NOVA")] <- "NS"
+# CES1984$Province_r[str_detect(CES1984$Province, "BRITISH")] <- "BC"
+# CES1984$Province_r[str_detect(CES1984$Province, "QUEBEC")] <- "QC"
+# CES1984$Province_r[str_detect(CES1984$Province, "MANITOBA")] <- "MB"
+# CES1984$Province_r[str_detect(CES1984$Province, "BRUNSWICK")] <- "NB"
+# CES1984$Province_r[str_detect(CES1984$Province, "SASK")] <- "SK"
+# CES1984$Province_r[str_detect(CES1984$Province, "ONTARIO")] <- "ON"
+# CES1984$Province_r[str_detect(CES1984$Province, "ALBERTA")] <- "AB"
+# 
+# CES1984$Province <- CES1984$Province_r
+# 
+# 
+# CES1984<-CES1984 %>% dplyr::select(-Province_r)
+```
+
+##Merging Data 
+
+```{r Merging}
+CPEP2014$Date<-as.character(CPEP2014$Date)
+
+# CES1984$Date <-as.character(CES1984$Date)
+
+```
+
+```{r Merging Data}
+Prov2020
+Prov2021
+
+surveys<-bind_rows(latestsurveys %>% 
+                     mutate(across(everything(), as.character)),
+                   Prov2020 %>% 
+        mutate(across(everything(), as.character)),
+        Prov2021 %>% 
+        mutate(across(everything(), as.character)),
+
+      CES2011 %>% 
+        mutate(across(everything(), as.character)),
+      CES2008 %>% 
+        mutate(across(everything(), as.character)),
+      CES2004 %>% 
+        mutate(across(everything(), as.character)),
+      CES2000 %>% 
+        mutate(across(everything(), as.character)),
+      CES1997 %>% 
+        mutate(across(everything(), as.character)),
+      CES1993 %>% 
+        mutate(across(everything(), as.character)),
+      CPEP2014 %>% 
+        mutate(across(everything(), as.character))) %>% 
+  mutate(Gender = str_to_title(
+        dplyr::recode(Gender,
+                                           `1` = "Male",
+                                              `2` ="Female",
+                                                `3` = "Other",
+                                              `4`= "Other",
+                                              `5` = "Female")
+        )
+  )
+
+
+
+
+surveys$Gender[surveys$Gender == "-9"] <- NA
+
+
+
+```
+
+#Creating New Variables
+
+##Relative Confidence and Region Variable
+
+```{r}
+surveys$Year <- gsub(".*?([0-9]+).*", "\\1", surveys$Survey)
+
+
+surveys$Province[surveys$Province == 7] <- "NS"
+surveys$Province[surveys$Province == 5] <- "NL"
+surveys$Conf_Fed <- as.numeric(surveys$Conf_Fed)
+surveys$Conf_Prov <- as.numeric(surveys$Conf_Prov)
+
+
+surveys <-surveys %>% 
+  mutate(Conf_Fed = ifelse(Conf_Fed > 0 & Conf_Fed < 5, Conf_Fed, NA),
+                             Conf_Fed = 5 - Conf_Fed,
+                             Conf_Prov = ifelse(Conf_Prov > 0 & Conf_Prov < 5, Conf_Prov, NA),
+                             Conf_Prov = 5 - Conf_Prov,
+                             Rel_Confidence = Conf_Fed - Conf_Prov )  %>% 
+  mutate(Region= dplyr::recode(Province,
+                                            "NL" = "Atlantic",
+                                            "PEI" = "Atlantic",
+                                             "NS" = "Atlantic",
+                                             "NB" = "Atlantic",
+                                            "QC" = "Quebec",
+                                              "ON" = "Ontario",
+                                               "MB" = "Prairies",
+                                               "SK" = "Prairies",
+                                              "AB" = "Prairies",
+                                              "BC" = "BC",
+                                            "YT" = "North",
+                                            "NT" = "North",
+                                            "NU" = "North"))
+
+
+
+```
+
+
+##Recoding Parties
+```{r Recoding Parties}
+surveys$Party_ID_r[surveys$Party_ID_r == "OTHER SINGLE MENTION"] <-"Other"
+surveys$Party_ID_r[surveys$Party_ID_r == "INDEPENDENT/NONE"] <-"Other"
+surveys$Party_ID_r[surveys$Party_ID_r == "PARTI NATIONALISTE"] <-"Other"
+surveys$Party_ID_r[surveys$Party_ID_r == "Alliance"] <-"Reform/Alliance"
+surveys$Party_ID_r[surveys$Party_ID_r == "Reform"] <-"Reform/Alliance"
+surveys$Party_ID_r[surveys$Party_ID_r == "PC"] <-"Other"
+surveys$Party_ID_r[str_detect(surveys$Party_ID_r,"SOCIAL CREDIT" )] <-"Other"
+surveys$Party_ID_r[str_detect(surveys$Party_ID_r,"&" )] <-"Other"
+surveys$Party_ID_r[surveys$Party_ID_r == "P.C."] <-"Conservative"
+
+surveys$Party_ID_r[surveys$Party_ID_r == "LIBERAL"] <-"Liberal"
+
+surveys$Language <- str_to_title(surveys$Language)
+surveys$Language[surveys$Language == "English Only"] <- "English"
+surveys$Language[surveys$Language == "French Only"] <- "French"
+surveys$Language[surveys$Language == "English & Other"] <- "English"
+surveys$Language[surveys$Language == "French & Other"] <- "French"
+surveys$Language[surveys$Language == "Other Only"] <- "Other"
+surveys$Language[surveys$Language == "Other Combinations"] <- "Other"
+
+table(surveys$Language,
+      surveys$Survey)
+
+
+table(surveys$Survey,
+     surveys$Party_ID)
+
+
+
+surveys <- surveys %>% mutate(YOB = ifelse(YOB> 2020, NA, YOB))
+
+```
+
+Add "Governing" Variable
+```{r}
+surveys <- surveys %>% mutate(Governing = ifelse(Year %in% c(1993, 1997, 2000, 2004, 2019, 2020, 2021, 2022), "Liberal", "Conservative"))
+
+surveys <- surveys %>% mutate(PM = ifelse(Year == 1993, "Mulroney", NA))
+
+surveys <- surveys %>% mutate(PM = ifelse(Year %in% c(1997, 2000), "Chretien", PM))
+surveys <- surveys %>% mutate(PM = ifelse(Year %in% c(2004), "Martin", PM))
+surveys <- surveys %>% mutate(PM = ifelse(Year %in% c(2008, 2011, 2012, 2013, 2014), "Harper", PM))
+surveys <- surveys %>% mutate(PM = ifelse(Year > 2015, "Trudeau", PM))
+```
+
+Add Age Variable
+```{r}
+surveys <- surveys %>% mutate(Age = as.numeric(Year) - as.numeric(YOB))
+
+
+```
+
+New regression Party Variable
+
+
+```{r}
+
+surveys <- surveys %>% mutate(Party_Regression = ifelse(as.character(Party_ID_r) == "Reform/Alliance", "Conservative", as.character(Party_ID_r)))
+
+surveys$Party_Regression <- factor(surveys$Party_Regression, levels=c("Liberal", unique(surveys$Party_Regression)[-2]))
+
+surveys$Education <- factor(surveys$Education, levels=c("Highschool or Less", "Post-Graduate Degree", "Some Post-Secondary", "Bachelor"))
+
+surveys$Governing <- factor(surveys$Governing, levels=c("Liberal", "Conservative"))
+```
+
+```{r}
+surveys$Region<-factor(surveys$Region, levels = c("Ontario", "BC", "Quebec", "North",  "Prairies", "Atlantic"))
+
+surveys$Fed_Prov_Power[surveys$Fed_Prov_Power == "1"]<-"Federal"
+
+surveys$Fed_Prov_Power[surveys$Fed_Prov_Power == "2"]<-"Provincial"
+
+surveys$Fed_Prov_Power[surveys$Fed_Prov_Power == "3"]<-NA
+
+region <- lm(Rel_Confidence ~ Region, surveys)
+
+surveys$Gender[surveys$Gender == -9] <- NA
+surveys$Interest <- as.numeric(surveys$Interest)
+
+surveys$Fed_Sat <- as.numeric(surveys$Fed_Sat)
+
+
+surveys <- surveys %>% mutate(Interest =ifelse(Interest >= 0 & Interest <= 10, Interest, NA))
+surveys <- surveys %>% mutate(Fed_Sat =ifelse(Fed_Sat >= 1 & Fed_Sat <= 4, 5 - Fed_Sat, NA))
+```
+
+
+#Figures
+
+## Figure 1 - Distribution of Relative Confidence Scores
+
+```{r}
+library(psych)
+freq <- as.data.frame(table(surveys$Rel_Confidence))
+
+freq$Var1 <- as.numeric(freq$Var1) - 4
+
+freq <- freq %>% mutate(PCT = round(Freq/sum(Freq),2))
+freq %>% ggplot(aes(x = Var1, y = PCT)) + geom_col(color = "black", fill = "darkgrey") + geom_vline(aes(xintercept = median(surveys$Rel_Confidence, na.rm=T), color = paste("Median", " (", round(median(surveys$Rel_Confidence, na.rm=T),3), ")", sep = "")
+), size = 2, linetype = "longdash")  + geom_vline(aes(xintercept = mean(surveys$Rel_Confidence, na.rm=T), color = paste("Mean", " (", round(mean(surveys$Rel_Confidence, na.rm=T),4), ")", sep = "")
+), linetype = "longdash", size = 2) + scale_y_continuous(expand = c(0,0), limits = c(0, .58), breaks = seq(0, .55, .05), labels = scales::percent) + scale_x_continuous(limits = c(-3, 3), breaks = seq(-3, 3, 1))+  geom_text(vjust = -.5, aes(label = paste(PCT*100, "%", sep = ""), x = Var1, y = PCT), size = 12) + labs(x = "Relative Confidence", y = "Percentage of Total Observations", title = "Distribution of Relative Confidence Scores", colour = "Statistic") +
+  theme(axis.title.x = element_text(size=18, color = "black"),
+        axis.title.y = element_text(size=18, color = "black"),
+    panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 20),
+        axis.text.y=element_text(size=20, color = "black"),
+    axis.text.x=element_text(size=20, color = "black"),
+       plot.title = ggtext::element_markdown(size = 30, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 25, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_blank(),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.x = element_blank(),
+       axis.line.x = element_line(color = "black"),
+       axis.ticks.y = element_line(color = "black"),
+       axis.ticks.length.x = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black"), legend.title=element_text(size=18), 
+    legend.text=element_text(size=16)) 
+
+ggsave("fig1.png", height =9, width = 14)
+```
+
+## Figure 2 - Relative Confidence Scores by Region
+```{r}
+describeBy(surveys$Rel_Confidence,
+            surveys$Region, mat=T) %>% subset(group1 != "North") %>% ggplot(aes(x = reorder(group1, -mean), y = mean)) + geom_col(fill = "#82b0fa", color = "black") + geom_errorbar(aes(x = group1, ymin = mean-se*1.96,
+                                                                                                         ymax=mean+se*1.96), width = 0.7) +scale_y_continuous(limits= c(-.3, .3), breaks = seq(-.4, .4, .1)) +
+  theme(axis.title.x = element_text(size=18, color = "black"),
+        axis.title.y = element_text(size=18, color = "black"),
+    panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 20),
+        axis.text.y=element_text(size=20, color = "black"),
+    axis.text.x=element_text(size=20, color = "black"),
+       plot.title = ggtext::element_markdown(size = 30, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 25, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_blank(),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.x = element_blank(),
+       axis.line.x = element_line(color = "black"),
+       axis.ticks.y = element_line(color = "black"),
+       axis.ticks.length.x = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black")) + labs (y = "Relative Confidence",  title = "Relative Confidence in Government", subtitle = "By Region", x = "Region") + geom_text(aes(y = ifelse(mean > 0,  -.021, +.021), x = group1, label = round(mean,2)), size = 12) +scale_y_continuous(limits= c(-.32, .12), breaks = seq(-.4, .4, .1))
+```
+
+## Figure 3 - Relative Confidence by Region Over time
+```{r}
+
+surveys$Year <- as.numeric(surveys$Year)
+
+surveys%>% mutate(n=1) %>% subset((((str_detect(Survey, "CES") ==T)|str_detect(Survey, "DC") ==T)) &Region != "North") %>% 
+  group_by(Year, Region) %>% summarise(Mean = mean(Rel_Confidence, na.rm=T),
+                                       se = sd(Rel_Confidence, na.rm=T)/sqrt(sum(n)),
+                                       n = sum(n)) %>%  ggplot(aes(x=Year, y = Mean, color = as.factor(Region))) + geom_point(size = 6) + geom_line(size = 1.4)  + geom_errorbar(aes(ymin = Mean-se*1.96,
+                                                                                                         ymax=Mean+se*1.96), width = .3, size = 1.2) +
+  scale_y_continuous(limits = c(-.55, .55), expand = c(0,0), breaks = seq(-5, 0.55, 0.15)) +
+  scale_x_continuous(limits = c(1992, 2022), breaks = c(1993, 1997, 2000, 2004, 2006, 2008, 2011, 2015, 2019, 2021), expand = c(0,0)) +theme_bw() + labs(y = "Relative Confidence", x= "Year", title = "Relative Confidence in the Federal Government", subtitle = "By Region", color = element_blank()) + scale_color_brewer(palette = "Dark2")+
+  geom_rect(mapping=aes(xmin=1992, xmax=1993, ymin=-0.55, ymax=-.50), color=NA, fill = "blue", ) +
+  geom_rect(mapping=aes(xmin=1993, xmax=2006, ymin=-0.55, ymax=-.50), color=NA, fill = "red")+geom_rect(mapping=aes(xmin=2006, xmax=2015, ymin=-0.55, ymax=-.50), color=NA, fill = "blue") + geom_rect(mapping=aes(xmin=2015, xmax=2022, ymin=-0.55, ymax=-.50), color=NA, fill = "red") + theme(axis.title.x = element_text(size=18, color = "black"),
+        axis.title.y = element_text(size=18, color = "black"),
+    panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 20),
+        axis.text.y=element_text(size=20, color = "black"),
+    axis.text.x=element_text(size=20, color = "black"),
+       plot.title = ggtext::element_markdown(size = 30, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 25, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_blank(),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.y = element_blank(),
+       axis.line.y = element_line(color = "black"),
+       axis.ticks.x = element_line(color = "black"),
+       axis.ticks.length.x = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black"),
+    legend.title=element_text(size=35), 
+    legend.text=element_text(size=30)) + geom_hline(yintercept = 0, color = "black") +
+  annotate("text", x = c(1997, 2003, 2010.5, 2018.5), y=-.52, label = c("Chretien (1993-2003)", "Martin (2003-06)", "Harper (2006-15)", "Trudeau (2015-23)"), size = 9, color = "white") + guides(colour = guide_legend(override.aes = list(size=10))) + scale_color_manual(values = c("black", "blue", "red", "orange", "purple"),
+                                                                                                                                                                                                                                                                                                                                                 labels= c("Ontario", "BC", "Quebec", "Prairies", "Atlantic")) 
+
+ggsave("fig3 - Regions over time.jpg", height = 12, width = 20)
+```
+
+## Figure 4 - Relative Confidence by Party ID Aggregate
+
+```{r}
+describeBy(surveys$Rel_Confidence,
+            surveys$Party_Regression, mat=T) %>% subset(group1 != "North") %>% ggplot(aes(y = reorder(group1, -mean), x = mean)) + geom_col(fill = "#82b0fa", color = "black") + geom_errorbar(aes(y = group1, xmin = mean-se*1.96,
+                                                                                                         xmax=mean+se*1.96), width = 0.7) +scale_x_continuous(limits= c(-.75, .75), breaks = seq(-1, 1, .25)) +
+  theme(axis.title.x = element_text(size=18, color = "black"),
+        axis.title.y = element_text(size=18, color = "black"),
+    panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 20),
+        axis.text.y=element_text(size=20, color = "black"),
+    axis.text.x=element_text(size=20, color = "black"),
+       plot.title = ggtext::element_markdown(size = 30, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 25, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.x = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.y = element_blank(),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.y = element_blank(),
+       axis.line.x = element_line(color = "black"),
+       axis.ticks.x = element_line(color = "black"),
+       axis.ticks.length.x = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black")) + labs (y = "Party Identification",  title = "Relative Confidence  in the Federal Government", subtitle = "By Party ID", x = "Relative Confidence") + geom_text(aes(x = ifelse(mean > 0,  -.1, +.1), y = group1, label = round(mean,2)), size = 12)
+
+
+?geom_text
+
+ggsave("fig 4 - parties.png", height=8, width = 14)
+```
+
+## Figure 5 - Relative Confidence by Party ID over time
+
+```{r}
+surveys%>% mutate(n=1) %>% subset((((str_detect(Survey, "CES") ==T)|str_detect(Survey, "DC") ==T)) & (Party_Regression == "Liberal" |Party_Regression == "Conservative" | Party_Regression == "NDP" | Party_Regression == "BQ")) %>% 
+  group_by(Year, Party_Regression) %>% summarise(Mean = mean(Rel_Confidence, na.rm=T),
+                                       se = sd(Rel_Confidence, na.rm=T)/sqrt(sum(n)),
+                                       n = sum(n)) %>%  ggplot(aes(x=Year, y = Mean, color = as.factor(Party_Regression))) + geom_point(size = 6) + geom_line(size = 1.4)   + geom_errorbar(aes(ymin = Mean-se*1.96,
+                                                                                                         ymax=Mean+se*1.96), width = 0.7) +
+  scale_y_continuous(limits = c(-.95, .55), expand = c(0,0), breaks = seq(-.85, 0.55, 0.1)) +
+  scale_x_continuous(limits = c(1992, 2022), breaks = c(1993, 1997, 2000, 2004, 2006, 2008, 2011, 2015, 2019, 2021), expand = c(0,0)) +theme_bw() + labs(y = "Relative Confidence", x= "Year", title = "Relative Confidence in the Federal Government", subtitle = "By Party ID", color = element_blank()) + scale_color_brewer(palette = "Dark2")+
+  geom_rect(mapping=aes(xmin=1992, xmax=1993, ymin=-0.95, ymax=-.90), color=NA, fill = "blue") +
+  geom_rect(mapping=aes(xmin=1993, xmax=2006, ymin=-0.95, ymax=-.90), color=NA, fill = "red")+geom_rect(mapping=aes(xmin=2006, xmax=2015, ymin=-0.95, ymax=-.90), color=NA, fill = "blue") + geom_rect(mapping=aes(xmin=2015, xmax=2022, ymin=-0.95, ymax=-0.90), color=NA, fill = "red") +scale_color_manual(values = c("red", "blue", "lightblue", "orange"),
+                                                                                                                                                                                                                                                                                                                                                 labels= c("Liberal", "Conservative", "BQ", "NDP"))  + theme(axis.title.x = element_text(size=18, color = "black"),
+        axis.title.y = element_text(size=18, color = "black"),
+    panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 20),
+        axis.text.y=element_text(size=20, color = "black"),
+    axis.text.x=element_text(size=20, color = "black"),
+       plot.title = ggtext::element_markdown(size = 30, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 25, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_blank(),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.y = element_blank(),
+       axis.line.y = element_line(color = "black"),
+       axis.ticks.x = element_line(color = "black"),
+       axis.ticks.length.x = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black"),
+    legend.title=element_text(size=35), 
+    legend.text=element_text(size=30)) + geom_hline(yintercept = 0, color = "black") +
+  annotate("text", x = c(1997, 2003, 2010.5, 2018.5), y=-.92, label = c("Chretien (1993-2003)", "Martin (2003-06)", "Harper (2006-15)", "Trudeau (2015-23)"), size = 9, color = "white") + guides(colour = guide_legend(override.aes = list(size=10))) 
+
+
+ggsave("fig5.png", height=12, width = 20)
+
+```
+
+##Figure 6 - Relative Confidence by langauge Group
+
+```{r}
+surveys2 <- surveys %>% subset(Language == "English" |Language == "French")
+
+surveys2 <- surveys2 %>% mutate(Quebec = ifelse(Province == "QC", "Quebec", "ROC"))
+
+surveys2 <- surveys2 %>% mutate(Lang_Region = paste(Language, Quebec)) %>% subset(Lang_Region == "French Quebec" | Lang_Region == "English Quebec" | Lang_Region == "English ROC" | Lang_Region == "French ROC" )
+
+
+
+describeBy(surveys2$Rel_Confidence,
+            surveys2$Lang_Region, mat=T) %>% subset(group1 != "North") %>% separate(group1, " ", into = c("Language", "Region")) %>% mutate(Region = ifelse(Region == "ROC", "Outside Quebec", "Quebec")) %>% ggplot(aes(x = Language, y = mean)) + geom_col(fill = "#82b0fa", color = "black") + geom_errorbar(aes(x = Language, ymin = mean-se*1.96,
+                                                                                                         ymax=mean+se*1.96), width = 0.7) + facet_wrap(~ Region) +
+  theme(axis.title.x = element_text(size=18, color = "black"),
+        axis.title.y = element_text(size=18, color = "black"),
+    panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 20),
+        axis.text.y=element_text(size=20, color = "black"),
+    axis.text.x=element_text(size=20, color = "black"),
+       plot.title = ggtext::element_markdown(size = 30, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 25, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_blank(),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.x = element_blank(),
+       axis.line.x = element_line(color = "black"),
+       axis.ticks.y = element_line(color = "black"),
+       axis.ticks.length.x = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black"),
+    strip.text = element_text(size = 15)) + labs (y = "Relative Confidence",  title = "Relative Confidence  in the Federal Government", subtitle = "By Language Group", x = "Language") + scale_y_continuous(limits = c(-0.4, 0.3), breaks = seq(-1,1, 0.1)) + geom_text(aes(y = ifelse(mean > 0,  -.05, +0.05), x = Language, label = round(mean,2)), size = 12)
+
+ggsave("Language-agg.png", height=7, width = 10)
+```
+
+
+
+##Figure 7 - Coefficient Plot
+
+```{r}
+
+
+library(broom)
+surveys$Region<-factor(surveys$Region, levels = c("Ontario", "BC", "Quebec", "North",  "Prairies", "Atlantic"))
+model  <- lm(Rel_Confidence ~ Region*Governing + Language*Governing + Language*Region + Party_Regression*Governing + Age*Governing + Education*Governing + Year + Survey, surveys)
+
+robust <- lm(Rel_Confidence ~ Region*Governing + Language*Governing + Language*Region + Party_Regression*Governing + Age*Governing + Education*Governing + Year + Survey, surveys)
+
+
+demo <- tidy(robust)
+demo$term <- gsub("Region", "", demo$term)
+demo$term <- gsub("Party_Regression", "", demo$term)
+demo$term <- gsub("Education", "", demo$term)
+demo$term <- gsub("Fed_Prov_Power", "", demo$term)
+demo$term <- gsub("/Alliance", "", demo$term)
+demo$term <- gsub("Conservative", "CPC", demo$term)
+demo$term <- gsub("Language", "", demo$term)
+demo$term <- gsub("Post-Secondary", "PS", demo$term)
+demo$term <- gsub("Post-Graduate Degree", "Post-Grad", demo$term)
+demo$term <- gsub("as.numeric", "", demo$term)
+demo$term <- gsub(":", " * ", demo$term)
+
+demo <- demo %>% subset(term != "(Intercept)" &  str_detect(term, "Survey") == F & str_detect(term, "Year") == F & term != "Other" & term != "GenderOther" & str_detect(term, "English & French") == F & str_detect(term, "Other") == F & str_detect(term, "North") == F) %>% mutate(term = ifelse(term %in% c('Quebec', 'BC', 'North', 'Prairies', "Atlantic"), paste(term, "(Ref = Ontario)", sep = " "), term), term = ifelse(term %in% c("Green", "CPC", "BQ", "NDP", "Reform"), paste(term, "(Ref = Liberal)", sep = " "), term), term = ifelse(term == "French", paste(term, "(Ref = English)", sep = " "), term),
+                                                                                                                                        term = ifelse(term %in% c("Some PS", "Bachelor", "Post-Grad"), paste(term, "(Ref = High School & Below)"), term),
+                                                                                                                                        term = ifelse(term == "GenderMale", "Male (Ref = Female)", term),
+                                                                                                                                        term = ifelse(term == "GoverningCPC", "CPC Government (Ref = Liberal)", term)) 
+
+demo$term <- gsub("GoverningCPC", "CPC Government", demo$term)
+demo$term
+
+
+
+```
+
+###Region-Level
+
+```{r}
+group <- demo %>% mutate(Group = ifelse(str_detect(term, "BC"), "Group", "Individual"),
+                Group = ifelse(str_detect(term, "Quebec"), "Group", Group),
+                Group = ifelse(str_detect(term, "Prairies"), "Group", Group),
+                Group = ifelse(str_detect(term, "Atlantic"), "Group", Group)) %>% subset(Group == "Group") %>%   ggplot(aes(x=estimate, y = factor(term, levels=c(demo$term
+)))) + geom_point(size = 2) + geom_errorbar(aes(xmin = estimate - std.error * 1.96, xmax =estimate + std.error  * 1.96), width = 0, color = "red", size =1) + geom_hline(yintercept = 0, linetype = "longdash", color = "red") + geom_errorbar(aes(xmin = estimate - std.error * 1.645, xmax =estimate + std.error  * 1.645), width = 0, size = 1, color = "black") + geom_vline(xintercept = 0, color = "red", linetype = "longdash") + theme(panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+          axis.text.x=element_text(size=10),
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 12),
+        axis.text.y=element_text(size=10),
+       plot.title = ggtext::element_markdown(size = 12, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 13, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.length.x = unit(.2, "cm"),
+       axis.ticks.x = element_line(color = "black"),
+       axis.ticks.y = element_line(color = "black"),
+       axis.ticks.length.y = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black")) + 
+  scale_x_continuous(limits = c(-1.2, 1.45), expand = c(0,0), breaks = seq(-1 , 1.4, 0.6)) + labs(x = "Estimate", y = "", title = "Region-level")
+```
+
+###Individual-Level
+```{r}
+individual <- demo %>% mutate(Group = ifelse(str_detect(term, "BC"), "Group", "Individual"),
+                Group = ifelse(str_detect(term, "Quebec"), "Group", Group),
+                Group = ifelse(str_detect(term, "Prairies"), "Group", Group),
+                Group = ifelse(str_detect(term, "Atlantic"), "Group", Group)) %>% subset(Group == "Individual" & term != "None") %>%   ggplot(aes(x=estimate, y = factor(term, levels=c(demo$term
+)))) + geom_point(size = 2) + geom_errorbar(aes(xmin = estimate - std.error * 1.96, xmax =estimate + std.error  * 1.96), width = 0, color = "red", size =1) + geom_hline(yintercept = 0, linetype = "longdash", color = "red") + geom_errorbar(aes(xmin = estimate - std.error * 1.645, xmax =estimate + std.error  * 1.645), width = 0, size = 1, color = "black") + geom_vline(xintercept = 0, color = "red", linetype = "longdash") + theme(panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+          axis.text.x=element_text(size=10),
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 12),
+        axis.text.y=element_text(size=10),
+       plot.title = ggtext::element_markdown(size = 12, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 13, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.length.x = unit(.2, "cm"),
+       axis.ticks.x = element_line(color = "black"),
+       axis.ticks.y = element_line(color = "black"),
+       axis.ticks.length.y = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black")) + 
+  scale_x_continuous(limits = c(-1.2, 1.45), expand = c(0,0), breaks = seq(-1 , 1.4, 0.6)) + labs(x = "Estimate", y = "", title = "Individual-level")
+
+library(gtable)
+
+
+
+
+
+
+install.packages("ggpubr")
+library(ggpubr)
+annotate_figure(ggarrange(group, individual), top = text_grob("Correlates of Relative Confidence in Government", 
+               color = "black", face = "bold", size = 14))
+
+ggsave("regression.jpg", width = 10)
+```
+
+
+
+##Figure 8 - Interaction Between Lamguage and Region
+
+```{r}
+data <- expand.grid(Region = c("Ontario", "Prairies", "Quebec", "BC", "Atlantic"), Language = c("English", "French")) 
+
+
+
+data <- data %>% mutate(Party_Regression = "Liberal",  "Age" = mean(surveys$Age, na.rm = T), Gender = "Male", Education = "Highschool or Less", Governing = "Liberal", Year = 2019, Survey = "CES2019")
+
+summary(robust)
+
+surveys$Region<-factor(surveys$Region, levels = c("Ontario", "BC", "Quebec", "North",  "Prairies", "Atlantic"))
+robust <- lm(Rel_Confidence ~ Region + Party_Regression + Region*Governing + Language*Governing + Language*Region + Party_Regression*Governing + Age*Governing + Education*Governing + Gender*Governing + Year + Survey, surveys)
+
+rbind(cbind(data, predict(robust, newdata = data,   interval="confidence", level = 0.95)) %>% mutate(Confidence = "Conf_95"))  %>% pivot_wider(id_cols = 1:10, names_from = Confidence, values_from = 11:12) %>% ggplot(aes(x = Region, y = fit, color = Language, ymin = lwr_Conf_95, ymax = upr_Conf_95)) + geom_point(size = 3) + geom_errorbar(width = 0.5, alpha = 1, size = 1.5) + scale_color_manual(values = c("red", "blue")) +
+  theme(axis.title.x = element_text(size=18, color = "black"),
+        axis.title.y = element_text(size=18, color = "black"),
+    panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 20),
+        axis.text.y=element_text(size=20, color = "black"),
+    axis.text.x=element_text(size=20, color = "black"),
+       plot.title = ggtext::element_markdown(size = 30, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 25, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_blank(),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.x = element_blank(),
+       axis.line.x = element_line(color = "black"),
+       axis.ticks.y = element_line(color = "black"),
+       axis.ticks.length.x = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black"), legend.title=element_text(size=18), 
+    legend.text=element_text(size=16)) + labs(y = "Predicted Relative Confidence", title = "Interaction Between Language and Region") + scale_y_continuous(limits = c(-0.1, 0.8), breaks = seq(-0.1, 0.8, .15))
+
+ggsave("Language Interaction.png", height=8, width = 14)
+
+```
+
+##Figure 9 - Relative Confidence by Region-year subsample regression
+
+
+```{r}
+
+data <- expand.grid(Region= c("Prairies", "Atlantic", "Ontario", "BC", "Quebec")) 
+
+
+
+data <- data %>% mutate(Party_Regression = "Liberal", Language = "English", "Age" = mean(surveys$Age, na.rm = T), Gender = "Male", Education = "Highschool or Less") 
+
+
+
+model1997 <- lm(Rel_Confidence ~ Region + Language + Party_Regression + Age + Education  + Gender + Language*Region, surveys %>% subset(Year ==  1997))
+summary(model1997)
+
+model2000 <- lm(Rel_Confidence ~ Region + Language + Party_Regression + Age + Education  + Gender + Language*Region, surveys %>% subset(Year ==  2000))
+model2004 <- lm(Rel_Confidence ~ Region + Language + Party_Regression + Age + Education  + Gender + Language*Region, surveys %>% subset(Year ==  2004))               
+model2008 <- lm(Rel_Confidence ~ Region + Language + Party_Regression + Age + Education  + Gender + Language*Region, surveys %>% subset(Year ==  2008))               
+model2011 <- lm(Rel_Confidence ~ Region + Language + Party_Regression + Age + Education  + Gender+ Language*Region, surveys %>% subset(Year ==  2011))               
+model2019 <- lm(Rel_Confidence ~ Region + Language + Party_Regression + Age + Education  + Gender + Language*Region, surveys %>% subset(Year ==  2019))
+model2020 <- lm(Rel_Confidence ~ Region + Language + Party_Regression + Age + Education  + Gender + Language*Region, surveys %>% subset(Year ==  2020))               
+model2021 <- lm(Rel_Confidence ~ Region + Language + Party_Regression + Age + Education  + Gender+ Language*Region, surveys %>% subset(Year ==  2021))               
+
+
+
+
+rbind(tidy(model1997) %>% mutate(year = 1997),
+tidy(model2000) %>% mutate(year = 2000),
+tidy(model2004) %>% mutate(year = 2004),
+tidy(model2008) %>% mutate(year = 2008),
+tidy(model2011) %>% mutate(year = 2011),
+tidy(model2019) %>% mutate(year = 2019),
+tidy(model2020) %>% mutate(year = 2020),
+tidy(model2021) %>% mutate(year = 2021)) %>% subset(str_detect(term, "Region") & str_detect(term, "North") == F) %>% subset(str_detect(term, "Language") == F) %>%mutate(stars = ifelse(p.value < 0.1, "•", NA),
+  stars = ifelse(p.value < 0.05, "*", stars),
+                                                                                 stars = ifelse(p.value < 0.01, "**", stars),
+                                                                                 stars = ifelse(p.value < 0.001, "***", stars))  %>% mutate(term = str_replace(term, "Region", "")) %>% ggplot(aes(x=estimate, y = term)) + geom_point(size = 4) + geom_errorbar(aes(xmin = estimate - std.error * 1.96, xmax = estimate + std.error  * 1.96), width = 0, color = "red", size = 2) + geom_vline(xintercept = 0, linetype = "longdash", color = "red") + facet_wrap(~year, nrow = 1) + geom_errorbar(aes(xmin = estimate - std.error * 1.645, xmax =estimate + std.error  * 1.645), width = 0, color = "black", size = 2)  + theme(axis.title.x = element_text(size=18, color = "black"),
+        axis.title.y = element_text(size=18, color = "black"),
+    panel.spacing = unit(1, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 20),
+        axis.text.y=element_text(size=20, color = "black"),
+    axis.text.x=element_text(size=14, color = "black"),
+       plot.title = ggtext::element_markdown(size = 30, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 25, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.y = element_blank(),
+       axis.line.y = element_line(color = "black"),
+       axis.ticks.x = element_line(color = "black"),
+       axis.ticks.length.x = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black"),
+    legend.title=element_text(size=18), 
+    legend.text=element_text(size=16),
+    strip.text.x = element_text(size = 30))+ labs(y = "Region", x = "Estimate", title = "Relative Confidence in the Federal Government", subtitle = "By region in year sub-sample regressions.", caption = "**Note:** • P < 0.1; * P 0.5; ** P < 0.01; *** P < 0.001")   + geom_text(aes(x = estimate - std.error  * 1.96 - .2, y = term, label =stars) , size = 7, color = "black") + scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, .5)) 
+
+
+
+ggsave("Region-yearly.png", height=6, width = 18)
+
+
+```
+
+##Figure 10 - Predicted Relative Confidence by Party ID in year subsample regression
+
+```{r}
+
+data <- expand.grid(Party_Regression= c("Liberal", "NDP", "BQ", "Conservative")) 
+
+
+
+data <- data %>% mutate(Region = "Ontario", Language = "English", "Age" = mean(surveys$Age, na.rm = T), Gender = "Male", Education = "Highschool or Less") 
+
+
+preds1997 <-  predict(model1997, newdata = data,    
+         interval="confidence")
+preds2000 <-  predict(model2000, newdata = data,    
+         interval="confidence")
+preds2004 <-  predict(model2004, newdata = data,    
+         interval="confidence")
+
+preds2008 <-  predict(model2008, newdata = data,    
+         interval="confidence")
+
+preds2011 <-  predict(model2011, newdata = data,    
+         interval="confidence")
+preds2019 <-  predict(model2019, newdata = data,    
+         interval="confidence")
+preds2020 <-  predict(model2020, newdata = data,    
+         interval="confidence")
+
+
+preds2021 <-  predict(model2021, newdata = data,    
+         interval="confidence")
+
+
+preds1997 <- cbind(data, preds1997) %>% mutate(Year = 1997)
+preds2000 <- cbind(data, preds2000) %>% mutate(Year = 2000)
+preds2004 <- cbind(data, preds2004) %>% mutate(Year = 2004)
+preds2008 <- cbind(data, preds2008) %>% mutate(Year = 2008)
+preds2011 <- cbind(data, preds2011) %>% mutate(Year = 2011)
+preds2019 <- cbind(data, preds2019) %>% mutate(Year = 2019)
+preds2020 <- cbind(data, preds2020) %>% mutate(Year = 2020)
+preds2021 <- cbind(data, preds2021) %>% mutate(Year = 2021)
+
+rbind(preds1997, preds2000, preds2004, preds2008, preds2011, preds2019, preds2020, preds2021) %>% ggplot(aes(x = Year, y = fit, color = Party_Regression)) + geom_point(size = 4) + geom_line(size = 1.1) + geom_errorbar(aes(ymin = upr, ymax = lwr), width = .5, size = 1.1) + labs(title = "")  + theme(axis.title.x = element_text(size=18, color = "black"),
+        axis.title.y = element_text(size=18, color = "black"),
+    panel.spacing = unit(1, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 20),
+        axis.text.y=element_text(size=20, color = "black"),
+    axis.text.x=element_text(size=14, color = "black"),
+       plot.title = ggtext::element_markdown(size = 20, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 17, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.y = element_blank(),
+       axis.line.y = element_line(color = "black"),
+       axis.ticks.x = element_line(color = "black"),
+       axis.ticks.length.x = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black"),
+    legend.title=element_text(size=18), 
+    legend.text=element_text(size=16),
+    strip.text.x = element_text(size = 17),
+    panel.grid.minor.x = element_line(colour = "#B7B7B7", 
+                                         size = 0.5, 
+                                         linetype = "dotted")) + scale_color_manual(values = c("red", "orange", "lightblue", "blue"),
+                                                                                                                                                                                                                                                                                                                                                 labels= c("Liberal", "NDP", "BQ", "Conservative")) + geom_hline(yintercept = 0, color = "black") + guides(colour = guide_legend(override.aes = list(size=10))) +
+  geom_rect(mapping=aes(xmin=1993, xmax=2006, ymin=-1.2, ymax=-1.4), color=NA, fill = "red")+geom_rect(mapping=aes(xmin=2006, xmax=2015, ymin= -1.2, ymax=-1.4), color=NA, fill = "blue") + geom_rect(mapping=aes(xmin=2015, xmax=2022, ymin=-1.2, ymax=-1.4), color=NA, fill = "red")+
+  annotate("text", x = c(1997, 2003, 2010.5, 2018.5), y=-1.3, label = c("Chretien (1993-2003)", "Martin (2003-06)", "Harper (2006-15)", "Trudeau (2015-23)"), size = 5, color = "white") + scale_x_continuous(breaks = c(1997, 2000, 2004, 2008, 2011, 2019, 2021), minor_breaks = seq(1993, 2021, 1), limits = c(1993, 2022), expand = c(0,0))  + scale_y_continuous(limits = c(-1.4, .7), expand = c(0,0), breaks = seq(-1.6, .6, .2)) + labs(y = "Predicted Relative Confidence", title = "Predicted Relative Confidence", subtitle = "By party ID in year sub-sample regressions", color = "Party ID")
+
+
+ggsave("predicted.png",width = 10)
+```
+
+##Figure 11 - Alternative models for robustness - region-level cpovariates
+
+```{r}
+surveys$Province <- factor(surveys$Province, levels = c("ON", unique(surveys$Province)[-3]))
+```
+
+
+```{r}
+no_controls_no_lang <- lm(Rel_Confidence ~ Region  + Party_Regression, surveys)
+
+no_controls <- lm(Rel_Confidence ~ Region  + Party_Regression + Language, surveys)
+
+lang_int <- lm(Rel_Confidence ~ Region + Party_Regression + Language*Region, surveys)
+
+gov_int <- lm(Rel_Confidence ~  Region + Party_Regression + Party_Regression*Governing + Language*Region + Region*Governing + Language*Governing, surveys)
+
+FE <- lm(Rel_Confidence ~  Region + Party_Regression +  Party_Regression*Governing + Language*Region + Region*Governing + Language*Governing  + as.numeric(Year) + Survey, surveys)
+
+demos <- lm(Rel_Confidence ~ Region + Party_Regression +Party_Regression*Governing + Language*Region + Region*Governing + Language*Governing  + as.numeric(Year) + Survey  + Age + Education  + Gender, surveys)
+
+robust <- lm(Rel_Confidence ~ Region + Party_Regression + Region*Governing + Language*Governing + Language*Region + Party_Regression*Governing + Age*Governing + Education*Governing + Gender*Governing + Year + Survey, surveys)
+
+interest <- lm(Rel_Confidence ~ Region + Party_Regression + Region*Governing + Language*Governing + Language*Region + Party_Regression*Governing + Age*Governing + Education*Governing + Gender*Governing + Year + Survey + Interest, surveys)
+
+satisfaction <- lm(Rel_Confidence ~ Region + Party_Regression + Region*Governing + Language*Governing + Language*Region + Party_Regression*Governing + Age*Governing + Education*Governing + Gender*Governing +  Year + Survey + Interest + Fed_Sat, surveys)
+
+decentral <- lm(Rel_Confidence ~ Region + Party_Regression + Region*Governing + Language*Governing + Language*Region + Party_Regression*Governing + Age*Governing + Education*Governing  + Gender*Governing + Year + Survey + Interest + Fed_Sat + Fed_Prov_Power, surveys)
+
+
+
+summary(robust)
+```
+
+
+```{r}
+alternative <- rbind(tidy(no_controls_no_lang) %>% mutate(Model = "Model 1"),
+
+tidy(no_controls) %>% mutate(Model = "Model 2"),
+
+tidy(lang_int) %>% mutate(Model = "Model 3"),
+
+tidy(gov_int) %>% mutate(Model = "Model 4"),
+
+tidy(FE) %>% mutate(Model = "Model 5"),
+
+tidy(demos) %>% mutate(Model = "Model 6"),
+
+tidy(robust) %>% mutate(Model = "Model 7"),
+
+tidy(interest) %>% mutate(Model = "Model 8"),
+
+tidy(satisfaction) %>% mutate(Model = "Model 9"),
+
+tidy(decentral) %>% mutate(Model = "Model 10")) 
+
+
+
+alternative$term <- gsub("Region", "", alternative$term)
+alternative$term <- gsub("Party_Regression", "", alternative$term)
+alternative$term <- gsub("Education", "", alternative$term)
+alternative$term <- gsub("Fed_Prov_Power", "Decentralization", alternative$term)
+alternative$term <- gsub("Conservative", "CPC", alternative$term)
+alternative$term <- gsub("Language", "", alternative$term)
+alternative$term <- gsub("Post-Secondary", "PS", alternative$term)
+alternative$term <- gsub("Post-Graduate Degree", "Post-Grad", alternative$term)
+alternative$term <- gsub("as.numeric", "", alternative$term)
+alternative$term <- gsub(":", " * ", alternative$term)
+
+
+
+alternative <- alternative %>% subset(term != "(Intercept)" &  str_detect(term, "Survey") == F & str_detect(term, "Year") == F & term != "Other" & term != "GenderOther" & str_detect(term, "English & French") == F & str_detect(term, "Other") == F & str_detect(term, "North") == F) 
+
+alternative$term <- gsub("GoverningCPC", "CPC Govt", alternative$term)
+
+
+
+
+alternative %>% mutate(Group = ifelse(str_detect(term, "BC"), "Group", "Individual"),
+                Group = ifelse(str_detect(term, "Quebec"), "Group", Group),
+                Group = ifelse(str_detect(term, "Prairies"), "Group", Group),
+                Group = ifelse(str_detect(term, "Atlantic"), "Group", Group))  %>% subset(Group == "Group") %>%   ggplot(aes(y=estimate, x = factor(Model, levels = c("Model 1", "Model 2", "Model 3", "Model 4", "Model 5", "Model 6", "Model 7", "Model 8", "Model 9", "Model 10")), color = factor(Model, levels = c("Model 1", "Model 2", "Model 3", "Model 4", "Model 5", "Model 6", "Model 7", "Model 8", "Model 9", "Model 10")))) + geom_point(size = 2) + geom_errorbar(aes(ymin = estimate - std.error * 1.96, ymax =estimate + std.error  * 1.96), width = 0, size =1) + geom_vline(xintercept = 0, linetype = "longdash", color = "red")  + geom_hline(yintercept = 0, color = "red", linetype = "longdash") + theme(panel.spacing = unit(.5, "lines")) + facet_wrap(~ factor(term, levels=c('Quebec', 'BC', 'North', 'Prairies', "Atlantic", "Quebec * French", "BC * French", "Prairies * French", "Atlantic * French", "Quebec * CPC Govt", "BC * CPC Govt", "Prairies * CPC Govt", "Atlantic * CPC Govt")), nrow = 1,  labeller = label_wrap_gen(width=5)) +  
+  theme(panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+          axis.text.x=element_blank(),
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 12),
+        axis.text.y=element_text(size=13),
+       plot.title = ggtext::element_markdown(size = 20, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 13, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_blank(),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.y = element_blank(),
+       axis.line.y = element_blank(),
+       axis.ticks.x = element_line(color = "black"),
+       axis.ticks.length.x = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 10)) + labs(color = "Model", x = "", y = "Estimate", title = "Alternative Models for Robustness", subtitle = "Region-level covariates") + scale_y_continuous(limits = c(-0.8, 0.8), breaks = seq(-0.8, 0.8, 0.2))
+
+
+ggsave("group.png", width = 12, height = 6)
+
+```
+
+##Figure 12 - Alternative models for robustness -Individual-level covariates
+
+
+```{r}
+
+ alternative %>% mutate(Group = ifelse(str_detect(term, "BC"), "Group", "Individual"),
+                Group = ifelse(str_detect(term, "Quebec"), "Group", Group),
+                Group = ifelse(str_detect(term, "Prairies"), "Group", Group),
+                Group = ifelse(str_detect(term, "Atlantic"), "Group", Group))  %>% subset(Group == "Individual" & str_detect(term,"None")==F) %>% mutate(term = ifelse(term == "DecentralizationProvincial", "Decentralized", term))  %>% mutate(term = str_replace(term, "GenderMale", "Male")) %>% mutate(term = str_replace(term, "Fed_Sat", "Satisfaction")) %>%  subset(term != "Interest" & term != "Decentralized" & term != "Satisfaction") %>% ggplot(aes(y=estimate, x = factor(Model, levels = c("Model 1", "Model 2", "Model 3", "Model 4", "Model 5", "Model 6", "Model 7", "Model 8", "Model 9", "Model 10")), color = factor(Model, levels = c("Model 1", "Model 2", "Model 3", "Model 4", "Model 5", "Model 6", "Model 7", "Model 8", "Model 9", "Model 10")))) + geom_point(size = 2) + geom_errorbar(aes(ymin = estimate - std.error * 1.96, ymax =estimate + std.error  * 1.96), width = 0, size =1) + geom_vline(xintercept = 0, linetype = "longdash", color = "red")  + geom_hline(yintercept = 0, color = "red", linetype = "longdash") + theme(panel.spacing = unit(.5, "lines")) + facet_wrap(~ factor(term, levels = c("CPC", "BQ", "NDP", "Green", "CPC Govt", "CPC * CPC Govt", "BQ * CPC Govt", "NDP * CPC Govt", "Green * CPC Govt", "French", "CPC Govt * French", "Age", "CPC Govt * Age", "Male", "CPC Govt * Male", "Some PS", "Bachelor", "Post-Grad", "CPC Govt * Some PS", "CPC Govt * Bachelor", "CPC Govt * Post-Grad", "Interest", "Satisfaction", "Decentralized") ), nrow = 1,  labeller = label_wrap_gen(width=5)) +  
+  theme(panel.spacing = unit(.1, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+          axis.text.x=element_blank(),
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 12),
+        axis.text.y=element_text(size=13),
+       plot.title = ggtext::element_markdown(size = 20, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 13, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_blank(),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.y = element_blank(),
+       axis.line.y = element_blank(),
+       axis.ticks.x = element_line(color = "black"),
+       axis.ticks.length.x = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 10)) + labs(color = "Model", x = "", y = "Estimate", title = "Alternative Models for Robustness", subtitle = "Individual-level covariates") + scale_y_continuous(limits = c(-0.8, 1.65), breaks = seq(-0.8, 1.6, 0.2))
+ 
+
+
+ggsave("individual.png", width = 14, height = 6)
+```
+
+
+#Appendices
+
+
+##Appendix 1 - Data:
+
+###Appendix 1b. Composition of the Data
+```{r}
+library(gt)
+library(texreg)
+
+reg_data <- surveys %>% dplyr::select(Party_Regression, Age, Region, Governing, Gender, Year, Survey, Education, Language, Rel_Confidence)
+
+
+
+
+reg_data <- reg_data %>% mutate(Complete = complete.cases(reg_data)) %>% subset(Complete == T)
+
+
+
+obs <- surveys %>% mutate(n = 1) %>% group_by(Survey) %>% summarize(Obs = sum(n)) 
+
+obs_reg <- reg_data %>% mutate(n = 1) %>% group_by(Survey) %>% summarize(Obs = sum(n))
+```
+
+
+```{r}
+complete_v_reg <- rbind(reg_data %>% dplyr::select(-Complete)%>%  mutate(Data = "Regression"),
+      surveys %>% dplyr::select(Party_Regression, Age, Region, Governing, Gender, Year, Survey, Education, Language, Rel_Confidence) %>% mutate(Data = "Overall"))
+
+complete_v_reg <- complete_v_reg %>% mutate(Gender = ifelse(Gender == "Male", 0, 1))
+complete_v_reg <- complete_v_reg %>% mutate(Governing = ifelse(Governing == "Liberal", 0, 1))
+library(fastDummies)
+complete_v_reg <- cbind(complete_v_reg, dummy_cols(complete_v_reg$Party_Regression)[-1])
+
+colnames(complete_v_reg) <- str_replace(colnames(complete_v_reg), ".data_", "")
+colnames(complete_v_reg) <- str_replace(colnames(complete_v_reg), "NA", "Party NA")
+colnames(complete_v_reg) <- str_replace(colnames(complete_v_reg), "Other", "Other Party")
+
+complete_v_reg <- cbind(complete_v_reg, dummy_cols(complete_v_reg$Education)[-1])
+
+colnames(complete_v_reg) <- str_replace(colnames(complete_v_reg), ".data_", "")
+
+colnames(complete_v_reg) <- str_replace(colnames(complete_v_reg), "NA", "Edu NA")
+
+complete_v_reg <- cbind(complete_v_reg, dummy_cols(complete_v_reg$Region)[-1])
+colnames(complete_v_reg) <- str_replace(colnames(complete_v_reg), ".data_", "")
+colnames(complete_v_reg) <- str_replace(colnames(complete_v_reg), "NA", "Region NA")
+
+
+
+
+complete_v_reg <- cbind(complete_v_reg, dummy_cols(complete_v_reg$Language)[-1])
+colnames(complete_v_reg) <- str_replace(colnames(complete_v_reg), ".data_", "")
+colnames(complete_v_reg) <- str_replace(colnames(complete_v_reg), "NA", "Language NA")
+colnames(complete_v_reg) <- str_replace(colnames(complete_v_reg), "Other", "Other Language")
+colnames(complete_v_reg) <- str_replace(colnames(complete_v_reg), "Other Language Party", "Other Party")
+
+
+complete_v_reg
+
+comparison <- complete_v_reg %>% group_by(Data) %>% summarize(Conservative = mean(Conservative, na.rm = T),
+        Liberal = mean(Liberal, na.rm = T),
+        NDP = mean(NDP, na.rm = T),
+        BQ = mean(BQ, na.rm = T),
+        Green = mean(Green, na.rm = T),
+        "Other Party" = mean(`Other Party`, na.rm = T),
+        French = mean(French, na.rm = T),
+        English = mean(English, na.rm = T),
+        Bilingual = mean(`English & French`, na.rm = T),
+       "Other Language" = mean(`Other Language`, na.rm = T),
+        "Mean" = mean(Age, na.rm = T),
+        "Median" = median(Age, na.rm = T),
+        "SD" = sd(Age, na.rm = T),
+        Women = mean(Gender, na.rm = T),
+       Men = 1 - mean(Gender, na.rm = T),
+        "High School or Less" = mean(`Highschool or Less`, na.rm = T),
+        "Some Post-Secondary" = mean(`Some Post-Secondary`, na.rm = T),
+        Bachelor = mean(Bachelor, na.rm = T),
+        `Post-Graduate Degree` = mean(`Post-Graduate Degree`, na.rm = T),
+        Prairies = mean(Prairies, na.rm = T),
+        Ontario = mean(Ontario, na.rm = T),
+        BC = mean(BC, na.rm = T),
+        Atlantic = mean(Atlantic, na.rm = T),
+        Quebec = mean(Quebec, na.rm = T),
+        North = mean(North, na.rm = T),
+        "RC Mean" = mean(Rel_Confidence, na.rm = T),
+       "RC Median" = median(Rel_Confidence, na.rm = T),
+       "RC SD" = sd(Rel_Confidence, na.rm = T),
+       "Liberal Government" = 1 - mean(Governing, na.rm = T),
+        "Conservative Government" = mean(Governing, na.rm = T)) %>% pivot_longer(cols = 2:31) %>% pivot_wider(names_from = "Data") %>% mutate(Difference = Overall - Regression) 
+
+comparison
+
+comparison$category[comparison$name %in% comparison$name[1:6]] <- "Party ID"
+
+
+comparison$category[comparison$name %in% comparison$name[7:10]] <- "Language"
+
+comparison$category[comparison$name %in% comparison$name[11:13]] <- "Age"
+
+
+comparison$category[comparison$name %in% comparison$name[14:15]] <- "Gender"
+
+comparison$category[comparison$name %in% comparison$name[16:19]] <- "Education"
+
+
+comparison$category[comparison$name %in% comparison$name[20:25]] <- "Region"
+
+
+comparison$category[comparison$name %in% comparison$name[26:28]] <- "Relative Confidence"
+
+comparison$category[comparison$name %in% comparison$name[29:30]] <- "Governing Party"
+
+colnames(comparison) <- c("Variable", "Overall Data", "Regression Data", "Difference", "category")
+
+comparison$`Overall Data` <- round(comparison$`Overall Data`, 2)
+comparison$`Regression Data` <- round(comparison$`Regression Data`, 2)
+comparison <- comparison %>% mutate(Difference = `Overall Data` - `Regression Data`)
+comparison
+
+
+gtsave(comparison %>%  group_by(category) %>%  gt(), "comparison.docx")
+```
+
+###Appendix 1c. Regression Data vs. Overall Sample
+
+
+```{r}
+observations <- merge(obs, obs_reg, by = "Survey", remove = F, all=T)
+observations$Year <- gsub(".*?([0-9]+).*", "\\1", observations$Survey)
+
+gsub(".*?([0-9]+).*", "\\1", observations$Survey)
+
+
+colnames(observations) <- c("Survey", "Main", "Regression", "Year")
+
+
+observations <- observations %>% mutate(Program = ifelse(Year > 2010 & Year < 2016 & Survey != "CES2011", "Cdn. Prov. Election Project", NA),
+                        Program = ifelse(str_detect(Survey, "CES"), "Canadian Election Study",Program),
+                        Program = ifelse(str_detect(Survey, "DC"), "Democracy Checkup",Program),
+                        Program = ifelse(is.na(Program), "Provincial Election Study", Program))
+
+observations <- observations %>% arrange(Year)
+
+
+
+
+
+
+
+observations <- rbind(observations %>% subset(Program == "Canadian Election Study"),
+      observations %>% subset(Program == "Democracy Checkup"),
+      observations %>% subset(Program == "Provincial Election Study"),
+      observations %>% subset(Program == "Cdn. Prov. Election Project")) %>% dplyr::select(Program, Survey, Main, Regression) %>% subset(Survey != "NA2012")
+
+observations$Regression[is.na(observations$Regression) == T] <-0
+
+
+obs <- observations %>% group_by(Program) %>% gt() %>% tab_spanner(label = "Sample Size", columns = 3:4)
+
+
+
+```
+
+##Appendix 2 - Full Regression Results
+
+###Appendix 2a. Region-Level Covariates
+
+```{r}
+htmlreg(list(no_controls_no_lang, no_controls, lang_int, gov_int, FE, demos, robust, interest, satisfaction, decentral), file = "Region.html",
+        custom.coef.map = list("(Intercept)" = "Intercept",
+                               "RegionBC"  = "BC",
+                               "RegionQuebec" = "Quebec",
+                               "RegionPrairies" = "Prairies",
+                               "RegionAtlantic" = "Atlantic",
+                               "RegionBC:LanguageFrench" = "BC * French",
+                               "RegionQuebec:LanguageFrench" = "Quebec * French",
+                               "RegionPrairies:LanguageFrench" = "Prairies * French",
+                               "RegionAtlantic:LanguageFrench" = "Atlantic * French",
+                               "RegionBC:GoverningConservative" = "BC * Conservative Government", 	  	  	  
+"RegionQuebec:GoverningConservative" = "Quebec * Conservative Government", 	  	  	  
+"RegionPrairies:GoverningConservative" = "Prairies * Conservative Government",  	  	  
+"RegionAtlantic:GoverningConservative" = "Atlantic * Conservative Government",
+"GoverningConservative:LanguageFrench" = "French * Conservative Government"))
+```
+
+###Appendix 2b. Individual-Level Covariates
+
+```{r}
+htmlreg(list(no_controls_no_lang, no_controls, lang_int, gov_int, FE, demos, robust, interest, satisfaction, decentral), file = "Indiv.html",
+        custom.coef.map = list("(Intercept)" = "Intercept",
+                               "Party_RegressionConservative" = "Conservative",
+                               "Party_RegressionGreen" = "Green",
+                                "Party_RegressionBQ" = "BQ",
+                               "PartyRegressionNDP" = "NDP",
+                               "Party_RegressionNone" = "No Party",
+                               "Party_RegressionOther" = "Other Party",
+
+"Age" = "Age",
+                               "LanguageEnglish & French" =  "English & French",
+                               "LanguageFrench" = "French",
+                               "LanguageOther" = "Other Language",
+                              "Party_RegressionConservative:GoverningConservative" = "Conservative * Conservative Government",
+"Party_RegressionBQ:GoverningConservative" = "BQ * Conservative Government",
+"Party_RegressionNDP:GoverningConservative" = "NDP * Conservative Government", 	  	  	 
+"Party_RegressionGreen:GoverningConservative" = "Green * Conservative Government", 	  	  	  	
+"Party_RegressionOther:GoverningConservative" = "Other Party * Conservative Government",
+"Interest" = "Interest",
+"Fed_Sat" = "Federal Satisfaction",
+"Fed_Prov_PowerProvincial" = "Decentralized"))
+
+
+```
+
+
+###Appendix 2c. Year subsample regressions
+
+```{r}
+
+
+screenreg(list(model1997, model2000, model2004, model2008, model2011, model2019, model2020, model2021))
+htmlreg(list(model1997, model2000, model2004, model2008, model2011, model2019, model2020, model2021),custom.model.names = c("1997", "2000", "2004", "2008", "2011", "2019", "2020", "2021"),
+        custom.coef.map = list("(Intercept)" = "Intercept",
+                               "RegionBC"  = "BC",
+                               "RegionQuebec" = "Quebec",
+                               "RegionPrairies" = "Prairies",
+                               "RegionAtlantic" = "Atlantic",
+                               "Party_RegressionConservative" = "Conservative",
+                               "Party_RegressionNDP" = "NDP",
+                               "Party_RegressionBQ" = "BQ",
+                               "Party_RegressionGreen" = "Green"),
+        custom.header = list("Liberal (Chretien)" = 1:2, "Liberal (Martin)" = 3, "Conservative (Harper)" = 4:5, "Liberal (Trudeau)" = 6:8), 
+       file = "yearly.html")
+
+```
+
+### Appendix 2d. Regression with 2019 and 2021 CES and 2019, 2020, 2021 DC Restricted Subsample 
+
+
+```{r}
+restricted <- rbind(reg_data %>% subset(Survey %in% c("CES2019", "CES2021", "DC2019", "DC2020", "DC2021") == F & (str_detect(Survey, "CES") | str_detect(Survey, "DC"))),
+reg_data %>% subset(Survey == "CES2019") %>% sample_n(1200, replace = F),
+reg_data %>% subset(Survey == "CES2021") %>% sample_n(1200, replace = F),
+reg_data %>% subset(Survey == "DC2019") %>% sample_n(1200, replace = F),
+reg_data %>% subset(Survey == "DC2020") %>% sample_n(1200, replace = F),
+reg_data %>% subset(Survey == "DC2021") %>% sample_n(1200, replace = F))
+
+
+
+
+alternative <- lm(Rel_Confidence ~ Party_Regression + Region*Governing + Language*Governing + Language*Region + Party_Regression*Governing + Age*Governing + Education*Governing + Year + Survey, test)
+alternative2 <- lm(Rel_Confidence ~ Party_Regression + Region*Governing + Language*Governing + Language*Region + Party_Regression*Governing + Age*Governing + Education*Governing + Year + Survey, restricted)
+
+
+
+
+
+htmlreg(list(robust, alternative), file = "Robust_Region.html",
+        custom.coef.map = list("(Intercept)" = "Intercept",
+                               "RegionBC"  = "BC",
+                               "RegionQuebec" = "Quebec",
+                               "RegionPrairies" = "Prairies",
+                               "RegionAtlantic" = "Atlantic",
+                               "RegionBC:LanguageFrench" = "BC * French",
+                               "RegionQuebec:LanguageFrench" = "Quebec * French",
+                               "RegionPrairies:LanguageFrench" = "Prairies * French",
+                               "RegionAtlantic:LanguageFrench" = "Atlantic * French",
+                               "RegionBC:GoverningConservative" = "BC * Conservative Government", 	  	  	  
+"RegionQuebec:GoverningConservative" = "Quebec * Conservative Government", 	  	  	  
+"RegionPrairies:GoverningConservative" = "Prairies * Conservative Government",  	  	  
+"RegionAtlantic:GoverningConservative" = "Atlantic * Conservative Government",
+"GoverningConservative:LanguageFrench" = "French * Conservative Government"))
+
+```
+
+
+##Appendix 3. Relative Confidence by Region and Language
+
+```{r}
+options(scipen = 999)
+surveys <- surveys %>% mutate(Lang_Region = paste(Region, Language)) 
+
+
+describe.by(surveys$Rel_Confidence, surveys$Lang_Region, mat = T) %>% subset(str_detect(group1, "NA") == F & str_detect(group1, "&") == F & str_detect(group1, "Other") == F & str_detect(group1, "North") == F) %>% separate(group1, " ", into = c("Region", "Language")) %>% ggplot(aes(y = Language, x = mean, xmin = mean - se*1.96, xmax = mean + se*1.96)) + geom_col(fill = "#82b0fa", color = "black") + facet_wrap(~ Region, nrow = 5) + geom_errorbar() + labs(x = "Relative Confidence", y = "Region", title = "Relative Confidence by Region and Language") +
+  theme(
+    strip.text.x = element_text(size = 20),
+    axis.title.x = element_text(size=18, color = "black"),
+        axis.title.y = element_text(size=18, color = "black"),
+    panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 20),
+        axis.text.y=element_text(size=20, color = "black"),
+    axis.text.x=element_text(size=20, color = "black"),
+       plot.title = ggtext::element_markdown(size = 30, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 25, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_blank(),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.x = element_blank(),
+       axis.line.x = element_line(color = "black"),
+       axis.ticks.y = element_line(color = "black"),
+       axis.ticks.length.x = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black")) + labs (x = "Relative Confidence",  title = "Relative Confidence in Government", subtitle = "By Region and Language", y = "") 
+ggsave("Appendix3b.png", width = 12, height  = 12)
+
+```
+##Appendix 4. Restricted Subsample Regressions
+
+
+
+```{r}
+
+restricted <- rbind(reg_data %>% subset(Survey %in% c("CES2019", "CES2021", "DC2019", "DC2020", "DC2021") == F & (str_detect(Survey, "CES") | str_detect(Survey, "DC"))),
+reg_data %>% subset(Survey == "CES2019") %>% sample_n(1200, replace = F),
+reg_data %>% subset(Survey == "CES2021") %>% sample_n(1200, replace = F),
+reg_data %>% subset(Survey == "DC2019") %>% sample_n(1200, replace = F),
+reg_data %>% subset(Survey == "DC2020") %>% sample_n(1200, replace = F),
+reg_data %>% subset(Survey == "DC2021") %>% sample_n(1200, replace = F))
+
+table(test$Survey)
+```
+
+
+
+```{r}
+iterations <- function(X) {tidy(lm(Rel_Confidence ~ Party_Regression + Region*Governing + Language*Governing + Language*Region + Party_Regression*Governing + Age*Governing + Education*Governing + Year + Survey, rbind(reg_data %>% subset(Survey %in% c("CES2019", "CES2021", "DC2019", "DC2020", "DC2021") == F),
+reg_data %>% subset(Survey == "CES2019") %>% sample_n(1200, replace = F),
+reg_data %>% subset(Survey == "CES2021") %>% sample_n(1200, replace = F),
+reg_data %>% subset(Survey == "DC2019") %>% sample_n(1200, replace = F),
+reg_data %>% subset(Survey == "DC2020") %>% sample_n(1200, replace = F),
+reg_data %>% subset(Survey == "DC2021") %>% sample_n(1200, replace = F))))%>% mutate(Iteration = X)}
+```
+
+
+```{r}
+iter <- bind_rows(Map(iterations, 1:1000)) 
+
+comparison <- rbind(tidy(robust)  %>% mutate(Model = "Original") %>% mutate(min = estimate - std.error * 1.96,
+                                   max = estimate + std.error * 1.96) %>% dplyr::select(term, estimate, max, min, Model),
+iter %>% group_by(term) %>% mutate(min = estimate - std.error * 1.96,
+                                   max = estimate + std.error * 1.96)  %>% summarize(estimate = mean(estimate),
+                                                                             max = mean(max),
+                                                                             min = mean(min)) %>% mutate(Model = "Restricted") %>% dplyr::select(term, estimate, max, min, Model)) 
+
+
+
+
+comparison$term <- gsub("Region", "", comparison$term)
+comparison$term <- gsub("Party_Regression", "", comparison$term)
+comparison$term <- gsub("Education", "", comparison$term)
+comparison$term <- gsub("Fed_Prov_Power", "", comparison$term)
+comparison$term <- gsub("/Alliance", "", comparison$term)
+comparison$term <- gsub("Conservative", "CPC", comparison$term)
+comparison$term <- gsub("Language", "", comparison$term)
+comparison$term <- gsub("Post-Secondary", "PS", comparison$term)
+comparison$term <- gsub("Post-Graduate Degree", "Post-Grad", comparison$term)
+comparison$term <- gsub("as.numeric", "", comparison$term)
+comparison$term <- gsub(":", " * ", comparison$term)
+
+
+
+comparison <- comparison %>% subset(term != "(Intercept)" &  str_detect(term, "Survey") == F & str_detect(term, "Year") == F & term != "Other" & term != "GenderOther" & str_detect(term, "English & French") == F & str_detect(term, "Other") == F & str_detect(term, "North") == F) %>% mutate(term = ifelse(term == "GenderMale", "Male", term),
+                                                                                                                                        term = ifelse(term == "GoverningCPC", "CPC Govt", term)) 
+
+comparison$term <- gsub("GoverningCPC", "CPC Govt", comparison$term)
+comparison$term <- gsub("GenderMale", "Male", comparison$term)
+```
+
+###Appendix 4a. Region-Level Covariates
+
+```{r}
+comparison %>% mutate(Group = ifelse(str_detect(term, "BC"), "Group", "Individual"),
+                Group = ifelse(str_detect(term, "Quebec"), "Group", Group),
+                Group = ifelse(str_detect(term, "Prairies"), "Group", Group),
+                Group = ifelse(str_detect(term, "Atlantic"), "Group", Group)) %>% subset(Group == "Group")  %>%  ggplot(aes(y = estimate, x = Model, ymin = min, ymax = max, color = Model)) + geom_point() + geom_errorbar() + facet_wrap(~ factor(term, levels = unique(comparison$term)), nrow = 1,  labeller = label_wrap_gen(width=5)) + theme(panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+          axis.text.x=element_blank(),
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 12),
+        axis.text.y=element_text(size=10),
+       plot.title = ggtext::element_markdown(size = 12, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 13, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.length.x = unit(.2, "cm"),
+       axis.ticks.x = element_line(color = "black"),
+       axis.ticks.y = element_line(color = "black"),
+       axis.ticks.length.y = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black")) + scale_color_manual(values = c("blue", "red"), labels = c("Original", "Restricted")) + geom_hline(yintercept = 0, linetype = "dashed") + labs(x = element_blank(), y = "Estimate",title = "Regression vs. Restricted Subsample", subtitle = "Region-Level Covariates") + scale_y_continuous(limits = c(-0.5, 0.61))
+
+
+
+ggsave("comparison-Region-level.jpg", width = 9, height = 5)
+
+
+
+comparison %>% subset(str_detect(term, "Prairies"))
+
+
+
+```
+
+###Appendix 4b. Individual-Level Covariates
+
+
+
+```{r}
+comparison %>% mutate(Group = ifelse(str_detect(term, "BC"), "Group", "Individual"),
+                Group = ifelse(str_detect(term, "Quebec"), "Group", Group),
+                Group = ifelse(str_detect(term, "Prairies"), "Group", Group),
+                Group = ifelse(str_detect(term, "Atlantic"), "Group", Group)) %>% subset(Group == "Individual") %>% subset(str_detect(term, "None") == F) %>%  ggplot(aes(y = estimate, x = Model, ymin = min, ymax = max, color = Model)) + geom_point() + geom_errorbar() + facet_wrap(~ factor(term, levels = unique(comparison$term)), nrow = 1,  labeller = label_wrap_gen(width=5)) + theme(panel.spacing = unit(.5, "lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside",
+          axis.text.x=element_blank(),
+        legend.position = "bottom",
+    plot.caption = ggtext::element_markdown(color = "black",
+                                                size = 12),
+        axis.text.y=element_text(size=10),
+       plot.title = ggtext::element_markdown(size = 14, 
+                                             color = "black", 
+                                             hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 12, 
+                                             color = "black", 
+                                             hjust = 0.5),
+       panel.grid.major.y = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.grid.major.x = element_line(colour = "#6d6d6d", 
+                                         size = 0.5, 
+                                         linetype = "dotted"),
+       panel.background = element_rect(fill = 'white'),
+        axis.ticks.length.x = unit(.2, "cm"),
+       axis.ticks.x = element_line(color = "black"),
+       axis.ticks.y = element_line(color = "black"),
+       axis.ticks.length.y = unit(.2, "cm"),
+       panel.border = element_blank(), 
+       
+       axis.line = element_line(color = "black")) + scale_color_manual(values = c("blue", "red"), labels = c("Original", "Restricted")) + geom_hline(yintercept = 0, linetype = "dashed") + labs(x = element_blank(), y = "Estimate", title = "Regression vs. Restricted Subsample", subtitle = "Individual-Level Covariates") + scale_y_continuous(limits = c(-1.8, 1.5), breaks = seq(-1.8, 1.4, .4))
+
+ggsave("comparison-individual.jpg", width = 14, height = 6)
+
+```
+
+
+```{r}
+alternative <- lm(Rel_Confidence ~ Party_Regression + Region*Governing + Language*Governing + Language*Region + Party_Regression*Governing + Age*Governing + Education*Governing + Year + Survey, test)
+alternative2 <- lm(Rel_Confidence ~ Party_Regression + Region*Governing + Language*Governing + Language*Region + Party_Regression*Governing + Age*Governing + Education*Governing + Year + Survey, test1)
+
+
+
+
+
+htmlreg(list(robust, alternative, alternative2), file = "Robust_Region.html",
+        custom.coef.map = list("(Intercept)" = "Intercept",
+                               "RegionBC"  = "BC",
+                               "RegionQuebec" = "Quebec",
+                               "RegionPrairies" = "Prairies",
+                               "RegionAtlantic" = "Atlantic",
+                               "RegionBC:LanguageFrench" = "BC * French",
+                               "RegionQuebec:LanguageFrench" = "Quebec * French",
+                               "RegionPrairies:LanguageFrench" = "Prairies * French",
+                               "RegionAtlantic:LanguageFrench" = "Atlantic * French",
+                               "RegionBC:GoverningConservative" = "BC * Conservative Government", 	  	  	  
+"RegionQuebec:GoverningConservative" = "Quebec * Conservative Government", 	  	  	  
+"RegionPrairies:GoverningConservative" = "Prairies * Conservative Government",  	  	  
+"RegionAtlantic:GoverningConservative" = "Atlantic * Conservative Government",
+"GoverningConservative:LanguageFrench" = "French * Conservative Government"))
+
+
+screenreg(alternative)
+
+htmlreg(list(robust, alternative), file = "robust_Indiv.html",
+        custom.coef.map = list("(Intercept)" = "Intercept",
+                               "Party_RegressionConservative" = "Conservative",
+                               "Party_RegressionGreen" = "Green",
+                                "Party_RegressionBQ" = "BQ",
+                               "PartyRegressionNDP" = "NDP",
+                               "Party_RegressionNone" = "No Party",
+                               "Party_RegressionOther" = "Other Party",
+
+"Age" = "Age",
+                               "LanguageEnglish & French" =  "English & French",
+                               "LanguageFrench" = "French",
+                               "LanguageOther" = "Other Language",
+                              "Party_RegressionConservative:GoverningConservative" = "Conservative * Conservative Government",
+"Party_RegressionBQ:GoverningConservative" = "BQ * Conservative Government",
+"Party_RegressionNDP:GoverningConservative" = "NDP * Conservative Government", 	  	  	 
+"Party_RegressionGreen:GoverningConservative" = "Green * Conservative Government", 	  	  	  	
+"Party_RegressionOther:GoverningConservative" = "Other Party * Conservative Government",
+"Interest" = "Interest",
+"Fed_Sat" = "Federal Satisfaction",
+"Fed_Prov_PowerProvincial" = "Decentralized"))
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
